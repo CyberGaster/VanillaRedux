@@ -1,3 +1,5 @@
+<img width="600" height="338" alt="logo" src="https://github.com/user-attachments/assets/ba081d49-f86e-4e85-957c-03a22f3378a0" />
+
 # Vanilla Redux
 
 This mod for Balatro completely changes the balance of the game: many jokers and other elements have been reworked and updated. The changes affect not only individual stuff, but also the overall dynamics — familiar tactics require rethinking, and in their place new opportunities for strategies and experiments appear. As a result, each game feels fresh and new, and the gameplay itself becomes more intense and interesting.

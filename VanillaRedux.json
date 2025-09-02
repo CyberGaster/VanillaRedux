@@ -1,0 +1,16 @@
+{
+    "id": "VanillaRedux",
+    "name": "VanillaRedux",
+    "display_name": "VanillaRedux",
+    "author": ["CyberGaster"],
+    "description": "Upgrade vanila jokers and other stuff",
+    "prefix": "vanilaredux",
+    "main_file": "VanillaRedux.lua",
+    "badge_colour": "00FA9A",
+    "version": "0.0.1",
+    "dependencies": [
+        "Steamodded (>=1.0.0~BETA-0827c)",
+        "Lovely (>=0.7)"
+    ]
+
+}

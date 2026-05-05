@@ -1,0 +1,14 @@
+# Lovely patch ignore
+.lovelyignore
+
+# Vanilla Balatro reference code (not part of the mod)
+Balatro/
+
+# OS and editor temp files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

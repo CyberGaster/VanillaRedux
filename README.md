@@ -1,6 +1,12 @@
+<p align="center">
+    <img src="thumbnail.jpg" alt="VanillaRedux Logo">
+</p>
+
 # Vanilla Redux
 
-A balance overhaul mod for [Balatro](https://store.steampowered.com/app/2379780/Balatro/). Many jokers and other elements have been reworked and updated — familiar tactics require rethinking, and new strategies emerge. Each run feels fresh and the gameplay becomes more intense.
+A balance overhaul mod for [Balatro](https://store.steampowered.com/app/2379780/Balatro/).
+
+Many jokers and other elements have been reworked and updated — familiar tactics require rethinking, and new strategies emerge. Each run feels fresh and the gameplay becomes more intense.
 
 ## Features
 - Updated and reworked 75 reworked vanilla jokers, 6 spectral and 2 tarot

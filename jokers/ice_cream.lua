@@ -74,6 +74,7 @@ local function update_ice_cream_time_penalty()
     end
 end
 
+if not rawget(_G, 'VP_ICE_CREAM_PATCHED') then
 local original_new_round = new_round
 function new_round()
     local result = original_new_round and original_new_round() or nil
@@ -91,6 +92,8 @@ function Game:update(dt)
         original_game_update(self, dt)
     end
     update_ice_cream_time_penalty()
+end
+_G.VP_ICE_CREAM_PATCHED = true
 end
 
 SMODS.Joker:take_ownership('ice_cream', {

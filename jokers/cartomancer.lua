@@ -10,7 +10,7 @@ local function spawn_tarot(card)
                         local tarot = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil, 'car')
                         tarot:add_to_deck()
                         G.consumeables:emplace(tarot)
-                        G.GAME.consumeable_buffer = 0
+                        G.GAME.consumeable_buffer = math.max(0, (G.GAME.consumeable_buffer or 1) - 1)
                         return true
                     end
                 }))

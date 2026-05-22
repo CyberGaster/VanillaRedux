@@ -4,7 +4,7 @@ SMODS.Consumable:take_ownership('c_hex', {
         text = {
             'Add {C:dark_edition}Polychrome{} to a',
             'random {C:attention}Joker{}, destroy',
-            'a random {C:attention}Joker{}',
+            'another random {C:attention}Joker{}',
         }
     },
     use = function(self, card, area, copier)
@@ -19,13 +19,12 @@ SMODS.Consumable:take_ownership('c_hex', {
             if not (v.ability and v.ability.eternal) then deletable[#deletable + 1] = v end
         end
         local to_destroy = nil
-        if #deletable > 0 then
-            to_destroy = pseudorandom_element(deletable, pseudoseed('hex_vr_destroy'))
-            if target and to_destroy == target and #deletable > 1 then
-                local alt = {}
-                for _, v in ipairs(deletable) do if v ~= target then alt[#alt + 1] = v end end
-                if #alt > 0 then to_destroy = pseudorandom_element(alt, pseudoseed('hex_vr_destroy2')) end
-            end
+        local destroy_pool = {}
+        for _, v in ipairs(deletable) do
+            if v ~= target then destroy_pool[#destroy_pool + 1] = v end
+        end
+        if #destroy_pool > 0 then
+            to_destroy = pseudorandom_element(destroy_pool, pseudoseed('hex_vr_destroy'))
         end
 
         G.E_MANAGER:add_event(Event({

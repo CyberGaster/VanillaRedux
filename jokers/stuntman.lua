@@ -17,9 +17,15 @@ SMODS.Joker:take_ownership('stuntman', {
     end,
     add_to_deck = function(self, card, from_debuff)
         G.GAME.round_resets.hands = G.GAME.round_resets.hands - card.ability.extra.h_plays
+        if G.GAME.current_round and G.GAME.current_round.hands_left then
+            G.GAME.current_round.hands_left = math.max(0, G.GAME.current_round.hands_left - card.ability.extra.h_plays)
+        end
     end,
     remove_from_deck = function(self, card, from_debuff)
         G.GAME.round_resets.hands = G.GAME.round_resets.hands + card.ability.extra.h_plays
+        if G.GAME.current_round and G.GAME.current_round.hands_left then
+            G.GAME.current_round.hands_left = G.GAME.current_round.hands_left + card.ability.extra.h_plays
+        end
     end,
     calculate = function(self, card, context)
         if context.joker_main then

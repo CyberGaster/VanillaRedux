@@ -4,7 +4,7 @@ SMODS.Consumable:take_ownership('c_ankh', {
         text = {
             'Create a copy of a',
             'random {C:attention}Joker{}, destroy',
-            'a random {C:attention}Joker{}',
+            'another random {C:attention}Joker{}',
             '{C:inactive}(Removes {C:dark_edition}Negative{} {C:inactive}from copy){}',
         }
     },
@@ -18,13 +18,12 @@ SMODS.Consumable:take_ownership('c_ankh', {
             end
         end
         local to_destroy = nil
-        if #deletable > 0 then
-            to_destroy = pseudorandom_element(deletable, pseudoseed('ankh_destroy_vr'))
-            if chosen_joker and to_destroy == chosen_joker and #deletable > 1 then
-                local pool = {}
-                for _, v in ipairs(deletable) do if v ~= chosen_joker then pool[#pool + 1] = v end end
-                if #pool > 0 then to_destroy = pseudorandom_element(pool, pseudoseed('ankh_destroy_vr2')) end
-            end
+        local destroy_pool = {}
+        for _, v in ipairs(deletable) do
+            if v ~= chosen_joker then destroy_pool[#destroy_pool + 1] = v end
+        end
+        if #destroy_pool > 0 then
+            to_destroy = pseudorandom_element(destroy_pool, pseudoseed('ankh_destroy_vr'))
         end
 
         if to_destroy then

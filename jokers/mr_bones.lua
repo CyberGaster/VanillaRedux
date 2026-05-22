@@ -56,6 +56,7 @@ SMODS.Joker:take_ownership('mr_bones', {
                     extra.step_idx = extra.step_idx + 1
                 end
 
+                card.ability.extra._just_saved = true
                 return {
                     message = localize('k_saved_ex'),
                     saved = true,
@@ -78,7 +79,8 @@ G.localization.descriptions.Joker.j_mr_bones_maxed = {
 local _orig_start_dissolve = Card.start_dissolve
 function Card:start_dissolve(dissolve_colours, silent, dissolve_time_fac, no_juice)
     if self.ability and self.ability.name == 'Mr. Bones' and self.ability.extra
-       and type(self.ability.extra) == 'table' then
+       and type(self.ability.extra) == 'table' and self.ability.extra._just_saved then
+        self.ability.extra._just_saved = nil
         return true
     end
     return _orig_start_dissolve(self, dissolve_colours, silent, dissolve_time_fac, no_juice)

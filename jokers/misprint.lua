@@ -24,6 +24,7 @@ SMODS.Joker:take_ownership('misprint', {
     end,
 })
 
+if not rawget(_G, 'VP_MISPRINT_PATCHED') then
 local old_generate = Card.generate_UIBox_ability_table
 function Card:generate_UIBox_ability_table()
     local t = old_generate(self)
@@ -51,4 +52,6 @@ function Card:generate_UIBox_ability_table()
         }
     end
     return t
+end
+_G.VP_MISPRINT_PATCHED = true
 end

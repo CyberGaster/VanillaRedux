@@ -492,35 +492,44 @@ SMODS.Joker:take_ownership('credit_card', {
                 end
             end
 
-            if rawget(_G,'G') and G.FUNCS and G.FUNCS.cash_out then
-                local orig_cash_out_cc = G.FUNCS.cash_out
+            -- Unified cash_out handler registry (processes handlers in joker slot order)
+            if not _G.VP_CASHOUT_HANDLERS then
+                _G.VP_CASHOUT_HANDLERS = {}
+            end
+
+            _G.VP_CASHOUT_HANDLERS['j_credit_card'] = function(cc)
+                local round_dollars = _cc_to_number(G.GAME.current_round.dollars)
+                if round_dollars <= 0 then return end
+                local raw_fee = round_dollars * 0.25
+                local decimal_part = raw_fee - math.floor(raw_fee)
+                local credit_fee = decimal_part >= 0.5 and math.ceil(raw_fee) or math.floor(raw_fee)
+                G.GAME.current_round.dollars = round_dollars - credit_fee
+                cc:juice_up(0.8, 0.8)
+                if rawget(_G,'card_eval_status_text') then
+                    card_eval_status_text(cc, 'extra', nil, nil, nil, {
+                        message = 'Credit: -$'..credit_fee,
+                        colour = G.C.RED
+                    })
+                end
+            end
+
+            if rawget(_G,'G') and G.FUNCS and G.FUNCS.cash_out and not _G.VP_CASHOUT_UNIFIED then
+                local orig_cash_out_unified = G.FUNCS.cash_out
                 G.FUNCS.cash_out = function(e)
-                    local all_cc = find_all_cc()
-                    
-                    if #all_cc > 0 and _cc_to_number(G.GAME.current_round.dollars) > 0 then
-                        for _, cc in ipairs(all_cc) do
-                            local round_dollars = _cc_to_number(G.GAME.current_round.dollars)
-                            if round_dollars <= 0 then break end
-                            local raw_fee = round_dollars * 0.25
-                            local decimal_part = raw_fee - math.floor(raw_fee)
-                            local credit_fee = decimal_part >= 0.5 and math.ceil(raw_fee) or math.floor(raw_fee)
-                            local net_dollars = round_dollars - credit_fee
-                            
-                            G.GAME.current_round.dollars = net_dollars
-                            
-                            cc:juice_up(0.8, 0.8)
-                            if rawget(_G,'card_eval_status_text') then
-                                card_eval_status_text(cc, 'extra', nil, nil, nil, {
-                                    message = 'Credit: -$'..credit_fee,
-                                    colour = G.C.RED
-                                })
+                    local any_cc = false
+                    if G.jokers and G.jokers.cards and _G.VP_CASHOUT_HANDLERS then
+                        for i = 1, #G.jokers.cards do
+                            local j = G.jokers.cards[i]
+                            if j and not j.debuff and j.config and j.config.center then
+                                local key = j.config.center.key
+                                if key == 'j_credit_card' then any_cc = true end
+                                local handler = _G.VP_CASHOUT_HANDLERS[key]
+                                if handler then handler(j) end
                             end
                         end
                     end
-                    
-                    orig_cash_out_cc(e)
-                    
-                    if #all_cc > 0 then
+                    orig_cash_out_unified(e)
+                    if any_cc then
                         G.E_MANAGER:add_event(Event({
                             trigger = 'after',
                             delay = 1.0,
@@ -531,7 +540,9 @@ SMODS.Joker:take_ownership('credit_card', {
                         }))
                     end
                 end
+                _G.VP_CASHOUT_UNIFIED = true
             end
+
 
 
             _G.VP_CREDIT_CARD_PATCHED = true

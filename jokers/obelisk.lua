@@ -21,6 +21,7 @@ SMODS.Joker:take_ownership('obelisk', {
     end,
 })
 
+if not rawget(_G, 'VP_OBELISK_PATCHED') then
 local _orig_calc = Card.calculate_joker
 function Card:calculate_joker(context)
     if self.ability and self.ability.name == 'Obelisk' and not self.debuff
@@ -45,4 +46,6 @@ function Card:calculate_joker(context)
         return r
     end
     return _orig_calc(self, context)
+end
+_G.VP_OBELISK_PATCHED = true
 end

@@ -50,24 +50,15 @@ SMODS.Joker:take_ownership('square', {
         if context.joker_main then
             local c = card.ability.extra.chips
             local m = card.ability.extra.mult
-            if c > 0 or m > 0 then
-                local msg
-                if c > 0 and m > 0 then
-                    msg = '+' .. c .. ' chips + ' .. m .. ' mult'
-                elseif c > 0 then
-                    msg = '+' .. c .. ' chips'
-                else
-                    msg = '+' .. m .. ' mult'
-                end
-                card_eval_status_text(card, 'extra', nil, nil, nil, {
-                    message = msg,
-                    colour = G.C.PURPLE,
-                    delay = 1.0
-                })
+            if c > 0 and m > 0 then
                 return {
-                    chip_mod = c,
-                    mult_mod = m,
+                    chips = c,
+                    mult = m
                 }
+            elseif c > 0 then
+                return { chips = c }
+            elseif m > 0 then
+                return { mult = m }
             end
             return {}
         end

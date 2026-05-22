@@ -18,7 +18,7 @@ SMODS.Joker:take_ownership('joker', {
             }
         end
 
-        if context.end_of_round and not context.individual and not context.repetition then
+        if context.end_of_round and not context.individual and not context.repetition and not context.blueprint then
             if G.GAME.blind and G.GAME.blind.boss then
                 card.ability.mult = card.ability.mult * 2
                 

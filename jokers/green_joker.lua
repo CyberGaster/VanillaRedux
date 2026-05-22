@@ -26,7 +26,7 @@ SMODS.Joker:take_ownership('green_joker', {
            and context.other_card == context.full_hand[#context.full_hand] then
             local prev = card.ability.x_mult or 1
             local step = card.ability.extra.discard_sub or 0.05
-            card.ability.x_mult = prev - step
+            card.ability.x_mult = math.max(0, prev - step)
             return {}
         end
 

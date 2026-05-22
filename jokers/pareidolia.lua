@@ -18,6 +18,7 @@ local function active_pareidolia_rank()
     return nil
 end
 
+if not rawget(_G, 'VP_PAREIDOLIA_PATCHED') then
 local _original_get_id = Card.get_id
 function Card:get_id()
     local rank = active_pareidolia_rank()
@@ -37,6 +38,8 @@ function Card:is_face(from_boss)
         return rank == 'Jack' or rank == 'Queen' or rank == 'King'
     end
     return _original_is_face(self, from_boss)
+end
+_G.VP_PAREIDOLIA_PATCHED = true
 end
 
 SMODS.Joker:take_ownership('pareidolia', {

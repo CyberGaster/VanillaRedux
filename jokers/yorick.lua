@@ -21,7 +21,7 @@ SMODS.Joker:take_ownership('yorick', {
         card.ability.yorick_discards = card.ability.extra.discards
     end,
     calculate = function(self, card, context)
-        if context.pre_discard and not context.blueprint then
+        if context.discard and context.other_card and not context.blueprint then
             if card.ability.yorick_discards <= 1 then
                 card.ability.yorick_discards = card.ability.extra.discards
                 card.ability.x_mult = card.ability.x_mult + card.ability.extra.xmult

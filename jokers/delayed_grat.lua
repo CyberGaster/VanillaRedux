@@ -119,86 +119,58 @@ SMODS.Joker:take_ownership('delayed_grat', {
                 end
             end
 
-            if rawget(_G,'G') and G.FUNCS and G.FUNCS.cash_out then
-                local orig_cash_out_dg = G.FUNCS.cash_out
-                G.FUNCS.cash_out = function(e)
-                    local delayed_grat = nil
-                    if G.jokers and G.jokers.cards then
-                        for i = 1, #G.jokers.cards do
-                            local j = G.jokers.cards[i]
-                            if j and j.ability and j.ability.name == 'Delayed Gratification' and not j.debuff then
-                                delayed_grat = j
-                                break
-                            end
+            -- Register Delayed Gratification cash_out handler
+            if not _G.VP_CASHOUT_HANDLERS then
+                _G.VP_CASHOUT_HANDLERS = {}
+            end
+            _G.VP_CASHOUT_HANDLERS['j_delayed_grat'] = function(card)
+                local extra = card.ability.extra
+                if type(extra) ~= 'table' then return end
+
+                local round_dollars = _dg_to_number(G.GAME.current_round.dollars)
+                if round_dollars > 0 then
+                    local raw_take = round_dollars * (extra.take_percent or 0.25)
+                    local take_amount = math.ceil(raw_take)
+                    if take_amount > 0 then
+                        G.GAME.current_round.dollars = round_dollars - take_amount
+                        extra.stored_value = (extra.stored_value or 0) + take_amount
+                        update_sell_cost(card)
+                        card:juice_up(0.8, 0.8)
+                        if rawget(_G,'card_eval_status_text') then
+                            card_eval_status_text(card, 'extra', nil, nil, nil, {
+                                message = '+$'..take_amount,
+                                colour = G.C.MONEY
+                            })
                         end
                     end
-                    
-                    if delayed_grat then
-                        local extra = delayed_grat.ability.extra
-                        if type(extra) ~= 'table' then
-                            extra = {
-                                take_percent = 0.25,
-                                boss_bonus = 0.5,
-                                stored_value = 0,
-                                base_sell = 1
-                            }
-                            delayed_grat.ability.extra = extra
-                        end
+                end
 
-                        local round_dollars = _dg_to_number(G.GAME.current_round.dollars)
-                        if round_dollars > 0 then
-                            local raw_take = round_dollars * (extra.take_percent or 0.25)
-                            local take_amount = math.ceil(raw_take)
-                            
-                            if take_amount > 0 then
-                                local net_dollars = round_dollars - take_amount
-                                G.GAME.current_round.dollars = net_dollars
-                                
-                                extra.stored_value = (extra.stored_value or 0) + take_amount
-                                update_sell_cost(delayed_grat)
-                                
-                                delayed_grat:juice_up(0.8, 0.8)
+                if extra._boss_defeated_this_round and (extra.stored_value or 0) > 0 then
+                    local bonus_mult = extra.boss_bonus or 0.5
+                    local current_value = extra.stored_value or 0
+                    local bonus = math.ceil(current_value * bonus_mult + 0.001)
+                    if bonus > 0 then
+                        extra.stored_value = math.ceil(current_value + bonus)
+                        update_sell_cost(card)
+                        G.E_MANAGER:add_event(Event({
+                            trigger = 'after',
+                            delay = 0.4,
+                            func = function()
+                                card:juice_up(0.8, 0.8)
                                 if rawget(_G,'card_eval_status_text') then
-                                    card_eval_status_text(delayed_grat, 'extra', nil, nil, nil, {
-                                        message = '+$'..take_amount,
-                                        colour = G.C.MONEY
+                                    card_eval_status_text(card, 'extra', nil, nil, nil, {
+                                        message = '+50%!',
+                                        colour = G.C.GOLD
                                     })
                                 end
+                                return true
                             end
-                        end
-
-                        if extra._boss_defeated_this_round and (extra.stored_value or 0) > 0 then
-                            local bonus_mult = extra.boss_bonus or 0.5
-                            local current_value = extra.stored_value or 0
-                            local bonus = math.ceil(current_value * bonus_mult + 0.001)
-                            
-                            if bonus > 0 then
-                                extra.stored_value = math.ceil(current_value + bonus)
-                                update_sell_cost(delayed_grat)
-                                
-                                G.E_MANAGER:add_event(Event({
-                                    trigger = 'after',
-                                    delay = 0.4,
-                                    func = function()
-                                        delayed_grat:juice_up(0.8, 0.8)
-                                        if rawget(_G,'card_eval_status_text') then
-                                            card_eval_status_text(delayed_grat, 'extra', nil, nil, nil, {
-                                                message = '+50%!',
-                                                colour = G.C.GOLD
-                                            })
-                                        end
-                                        return true
-                                    end
-                                }))
-                            end
-
-                            extra._boss_defeated_this_round = false
-                        end
+                        }))
                     end
-                    
-                    orig_cash_out_dg(e)
+                    extra._boss_defeated_this_round = false
                 end
             end
+
 
             _G.VP_DELAYED_GRAT_PATCHED = true
         end

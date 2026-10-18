@@ -21,18 +21,12 @@ SMODS.Joker:take_ownership('bootstraps', {
             if type(card.ability.extra) == 'table' then
                 stored = tonumber(card.ability.extra.mult_stored)
             end
-            if stored == nil and G and G.GAME then
-                stored = G.GAME.vp_bootstraps_persist_mult
-            end
             card.ability._vp_boot_mult = tonumber(stored) or 0
         end
         if card.ability._vp_boot_carry == nil then
             local c = nil
             if type(card.ability.extra) == 'table' then
                 c = tonumber(card.ability.extra.carry_stored)
-            end
-            if c == nil and G and G.GAME then
-                c = G.GAME.vp_bootstraps_persist_carry
             end
             card.ability._vp_boot_carry = math.max(0, math.floor(tonumber(c) or 0) % 2)
         end
@@ -85,12 +79,7 @@ if not rawget(_G, 'VP_BOOTSTRAPS_CALC_PATCHED') and rawget(_G, 'Card') and Card.
     local old_calculate_joker = Card.calculate_joker
     function Card:calculate_joker(context)
         if self.ability and self.ability.name == 'Bootstraps' and not self.debuff then
-            if context and context.selling_self then
-                if G then
-                    G.GAME.vp_bootstraps_persist_mult = (self.ability and self.ability._vp_boot_mult) or 0
-                    G.GAME.vp_bootstraps_persist_carry = (self.ability and self.ability._vp_boot_carry) or 0
-                end
-            elseif context and context.cardarea == G.jokers then
+            if context and context.cardarea == G.jokers then
                 if context.joker_main then
                     local mult = (self.ability and self.ability._vp_boot_mult) or 0
                     if mult > 0 then
@@ -113,26 +102,17 @@ end
 
 if not rawget(_G, 'VP_BOOTSTRAPS_UI_PATCHED') and rawget(_G, 'Card') and Card.generate_UIBox_ability_table then
     local old_generate_UIBox = Card.generate_UIBox_ability_table
-    function Card:generate_UIBox_ability_table()
-        if self.ability and self.ability.set == 'Joker' and self.ability.name == 'Bootstraps' then
-            local mult = (self.ability and type(self.ability._vp_boot_mult) == 'number') and self.ability._vp_boot_mult or 0
-            local saved_extra = self.ability.extra
-            local saved_dollars = G and G.GAME and G.GAME.dollars
-            local saved_buffer = G and G.GAME and G.GAME.dollar_buffer
-            self.ability.extra = { mult = 1, dollars = 1 }
-            if G and G.GAME then
-                G.GAME.dollars = mult
-                G.GAME.dollar_buffer = 0
-            end
-            local result = old_generate_UIBox(self)
-            self.ability.extra = saved_extra
-            if G and G.GAME then
-                G.GAME.dollars = saved_dollars
-                G.GAME.dollar_buffer = saved_buffer
-            end
+    function Card:generate_UIBox_ability_table(vars_only)
+        local extra = self.ability and self.ability.extra
+        if self.ability and self.ability.set == 'Joker' and self.ability.name == 'Bootstraps'
+           and not (type(extra) == 'table' and type(extra.mult) == 'number' and type(extra.dollars) == 'number') then
+            self.ability.extra = { mult = 1, dollars = 2 }
+            local ok, result = pcall(old_generate_UIBox, self, vars_only)
+            self.ability.extra = extra
+            if not ok then error(result, 0) end
             return result
         end
-        return old_generate_UIBox(self)
+        return old_generate_UIBox(self, vars_only)
     end
     _G.VP_BOOTSTRAPS_UI_PATCHED = true
 end

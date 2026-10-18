@@ -25,8 +25,7 @@ SMODS.Joker:take_ownership('bull', {
             card.ability.extra = default_extra
         end
         if card.ability._vp_bull_chips == nil then
-            local persisted = (G and G.GAME and G.GAME.vp_bull_persist_chips) or 0
-            card.ability._vp_bull_chips = persisted
+            card.ability._vp_bull_chips = 0
         end
     end,
 })
@@ -69,11 +68,7 @@ if not rawget(_G, 'VP_BULL_CALC_PATCHED') and rawget(_G, 'Card') and Card.calcul
     local old_calculate_joker = Card.calculate_joker
     function Card:calculate_joker(context)
         if self.ability and self.ability.name == 'Bull' and not self.debuff then
-            if context and context.selling_self then
-                if G then
-                    G.GAME.vp_bull_persist_chips = (self.ability and self.ability._vp_bull_chips) or 0
-                end
-            elseif context and context.cardarea == G.jokers then
+            if context and context.cardarea == G.jokers then
                 if context.joker_main then
                     local chips = (self.ability and self.ability._vp_bull_chips) or 0
                     if chips > 0 then
@@ -96,19 +91,17 @@ end
 
 if not rawget(_G, 'VP_BULL_UI_PATCHED') and rawget(_G, 'Card') and Card.generate_UIBox_ability_table then
     local old_generate_UIBox = Card.generate_UIBox_ability_table
-    function Card:generate_UIBox_ability_table()
-        if self.ability and self.ability.set == 'Joker' and self.ability.name == 'Bull' then
-            local chips = (self.ability and type(self.ability._vp_bull_chips) == 'number') and self.ability._vp_bull_chips or 0
+    function Card:generate_UIBox_ability_table(vars_only)
+        if self.ability and self.ability.set == 'Joker' and self.ability.name == 'Bull'
+           and type(self.ability.extra) ~= 'number' then
             local saved_extra = self.ability.extra
-            local saved_dollars = G and G.GAME and G.GAME.dollars
             self.ability.extra = 2
-            if G and G.GAME then G.GAME.dollars = chips end
-            local result = old_generate_UIBox(self)
+            local ok, result = pcall(old_generate_UIBox, self, vars_only)
             self.ability.extra = saved_extra
-            if G and G.GAME and saved_dollars ~= nil then G.GAME.dollars = saved_dollars end
+            if not ok then error(result, 0) end
             return result
         end
-        return old_generate_UIBox(self)
+        return old_generate_UIBox(self, vars_only)
     end
     _G.VP_BULL_UI_PATCHED = true
 end

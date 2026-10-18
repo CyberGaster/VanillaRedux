@@ -1,3 +1,5 @@
+local STEEL_XMULT = 0.5
+
 local function count_steel_in_hand()
     local count = 0
     if rawget(_G, 'G') and G.hand and G.hand.cards then
@@ -20,16 +22,16 @@ SMODS.Joker:take_ownership('steel_joker', {
             '{C:inactive}(Currently {X:mult,C:white}X#2#{C:inactive} Mult)'
         }
     },
-    config = { extra = 0.75 },
+    config = { extra = STEEL_XMULT },
     loc_vars = function(self, info_queue, card)
         local steel_count = count_steel_in_hand()
-        local current_mult = 1 + steel_count * card.ability.extra
-        return { vars = { card.ability.extra, current_mult } }
+        local current_mult = 1 + steel_count * STEEL_XMULT
+        return { vars = { STEEL_XMULT, current_mult } }
     end,
     calculate = function(self, card, context)
         if context.joker_main then
             local steel_count = count_steel_in_hand()
-            local x_mult = 1 + steel_count * card.ability.extra
+            local x_mult = 1 + steel_count * STEEL_XMULT
             if steel_count > 0 then
                 return { x_mult = x_mult }
             end

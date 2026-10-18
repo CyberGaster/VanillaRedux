@@ -166,8 +166,8 @@ plan_for_best_hand = function(remain, draw_n, exclude_top_n)
         end
     end
 
-    local four_fingers = next(find_joker and find_joker('Four Fingers') or {}) and true or false
-    local target_size = 5 - (four_fingers and 1 or 0)
+    local play_limit = G.GAME and G.GAME.starting_params and tonumber(G.GAME.starting_params.play_limit) or 5
+    local target_size = math.max(1, math.min(5, play_limit))
 
     local function best_name_from_results(results)
         local best_n, sc_best, fb_best = nil, nil, -1
@@ -409,7 +409,7 @@ function Card:calculate_joker(context)
         local is_bp = context and context.blueprint
         local sliced = context and (context.blueprint_card or self).getting_sliced
 
-        if context and context.pre_discard and not is_bp and not sliced then
+        if context and context.pre_discard and not context.hook and not is_bp and not sliced then
             local cr = G.GAME and G.GAME.current_round
             if cr and (cr.discards_left or 0) == 1 and context.full_hand and G and G.deck and G.hand then
                 local st = _ensure_state()

@@ -66,6 +66,9 @@ SMODS.Joker:take_ownership('seance', {
             end
             return {}
         end
+        if context.joker_main then
+            return {}
+        end
     end,
     blueprint_compat = true,
 })

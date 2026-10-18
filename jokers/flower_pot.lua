@@ -5,10 +5,11 @@ local function count_unique_suits(scoring_hand)
     for i = 1, #scoring_hand do
         local c = scoring_hand[i]
         if c and c.ability and c.ability.name ~= 'Wild Card' and not c.debuff then
-            if c:is_suit('Hearts') and suits.Hearts == 0 then suits.Hearts = 1 end
-            if c:is_suit('Diamonds') and suits.Diamonds == 0 then suits.Diamonds = 1 end
-            if c:is_suit('Spades') and suits.Spades == 0 then suits.Spades = 1 end
-            if c:is_suit('Clubs') and suits.Clubs == 0 then suits.Clubs = 1 end
+            if c:is_suit('Hearts') and suits.Hearts == 0 then suits.Hearts = 1
+            elseif c:is_suit('Diamonds') and suits.Diamonds == 0 then suits.Diamonds = 1
+            elseif c:is_suit('Spades') and suits.Spades == 0 then suits.Spades = 1
+            elseif c:is_suit('Clubs') and suits.Clubs == 0 then suits.Clubs = 1
+            end
         end
     end
 

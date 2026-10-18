@@ -3,8 +3,8 @@ local function count_rare_legendary()
     if G and G.jokers and G.jokers.cards then
         for i = 1, #G.jokers.cards do
             local joker = G.jokers.cards[i]
-            if joker.config and joker.config.center and joker.config.center.rarity
-               and joker.config.center.rarity >= 3 then
+            local rarity = joker.config and joker.config.center and joker.config.center.rarity
+            if type(rarity) == 'number' and rarity >= 3 then
                 count = count + 1
             end
         end

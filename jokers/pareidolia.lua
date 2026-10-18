@@ -1,8 +1,20 @@
 local RANKS = {'Jack', 'Queen', 'King'}
 local RANK_IDS = { Jack = 11, Queen = 12, King = 13 }
 
-local function get_random_rank()
-    return RANKS[math.random(1, #RANKS)]
+local function get_random_rank(exclude)
+    local pool = {}
+    for _, rank in ipairs(RANKS) do
+        if rank ~= exclude then pool[#pool + 1] = rank end
+    end
+    if G.GAME and G.GAME.pseudorandom then
+        return pseudorandom_element(pool, pseudoseed('vr_pareidolia'))
+    end
+    return pool[math.random(1, #pool)]
+end
+
+local function has_no_rank(c)
+    if SMODS.has_no_rank then return SMODS.has_no_rank(c) end
+    return c.ability and c.ability.effect == 'Stone Card'
 end
 
 local function active_pareidolia_rank()
@@ -23,7 +35,7 @@ local _original_get_id = Card.get_id
 function Card:get_id()
     local rank = active_pareidolia_rank()
     if rank and self.base and self.base.id
-       and not self.ability.stone_card and not self.debuff then
+       and not has_no_rank(self) and not self.debuff then
         return RANK_IDS[rank] or 11
     end
     return _original_get_id(self)
@@ -34,7 +46,7 @@ function Card:is_face(from_boss)
     local rank = active_pareidolia_rank()
     if rank then
         if self.debuff and not from_boss then return end
-        if self.ability.stone_card then return end
+        if has_no_rank(self) then return end
         return rank == 'Jack' or rank == 'Queen' or rank == 'King'
     end
     return _original_is_face(self, from_boss)
@@ -70,21 +82,18 @@ SMODS.Joker:take_ownership('pareidolia', {
             if G.jokers and G.jokers.cards then
                 for _, j in ipairs(G.jokers.cards) do
                     if j == card then break end
-                    if j.config and j.config.center_key == 'j_pareidolia' and not j.debuff then
+                    if j.config and j.config.center and j.config.center.key == 'j_pareidolia' and not j.debuff then
                         dominated = true
                         break
                     end
                 end
             end
             if not dominated then
-                local new_rank = get_random_rank()
-                while new_rank == card.ability.extra.face_rank do
-                    new_rank = get_random_rank()
-                end
+                local new_rank = get_random_rank(card.ability.extra.face_rank)
                 card.ability.extra.face_rank = new_rank
                 if G.jokers and G.jokers.cards then
                     for _, j in ipairs(G.jokers.cards) do
-                        if j.config and j.config.center_key == 'j_pareidolia' and j ~= card and j.ability and j.ability.extra then
+                        if j.config and j.config.center and j.config.center.key == 'j_pareidolia' and j ~= card and j.ability and j.ability.extra then
                             j.ability.extra.face_rank = new_rank
                         end
                     end

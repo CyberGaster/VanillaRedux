@@ -30,6 +30,10 @@ SMODS.Joker:take_ownership('hit_the_road', {
             end
         end
 
+        if context.end_of_round and not context.individual and not context.repetition then
+            return {}
+        end
+
         if context.joker_main then
             local x = card.ability.x_mult or 1
             if x > 1 then

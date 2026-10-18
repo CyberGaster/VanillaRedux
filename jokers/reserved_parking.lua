@@ -11,6 +11,7 @@ SMODS.Joker:take_ownership('reserved_parking', {
     cost = 4,
     config = { extra = { dollars = 2, odds = 2 } },
     loc_vars = function(self, info_queue, card)
-        return { vars = { card.ability.extra.dollars, '1', card.ability.extra.odds } }
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra.odds, 'parking')
+        return { vars = { card.ability.extra.dollars, numerator, denominator } }
     end,
 })

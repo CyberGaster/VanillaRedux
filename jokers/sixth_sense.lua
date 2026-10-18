@@ -32,6 +32,21 @@ local function get_sixth_state(source_card)
     return st
 end
 
+local vr_sixth_start_run = Game.start_run
+function Game:start_run(args)
+    vr_sixth_start_run(self, args)
+    if Cartomancer and Cartomancer.juice_joker_before_hand and not Cartomancer.vr_sixth_patched then
+        local orig_juice = Cartomancer.juice_joker_before_hand
+        Cartomancer.juice_joker_before_hand = function(joker)
+            if joker and joker.config and joker.config.center and joker.config.center.key == 'j_sixth_sense' then
+                return false
+            end
+            return orig_juice(joker)
+        end
+        Cartomancer.vr_sixth_patched = true
+    end
+end
+
 SMODS.Joker:take_ownership('sixth_sense', {
     loc_txt = {
         name = 'Sixth Sense',
@@ -48,6 +63,9 @@ SMODS.Joker:take_ownership('sixth_sense', {
         return { vars = { ''..(G.GAME and G.GAME.probabilities.normal or 1) } }
     end,
     calculate = function(self, card, context)
+        if context.destroying_card then
+            return {}
+        end
         if context.individual and context.cardarea == G.play and context.other_card and not context.other_card.debuff then
             if context.other_card:get_id() ~= 6 then return {} end
             if not (G.consumeables and G.consumeables.cards and G.consumeables.config) then return {} end

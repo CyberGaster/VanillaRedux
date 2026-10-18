@@ -14,7 +14,7 @@ SMODS.Joker:take_ownership('baseball', {
             local other_joker = context.other_joker
 
             if other_joker.config.center.key == 'j_baseball' then
-                return nil
+                return {}
             end
 
             local rarity = other_joker.config.center.rarity

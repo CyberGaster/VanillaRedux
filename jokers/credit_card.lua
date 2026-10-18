@@ -105,38 +105,6 @@ SMODS.Joker:take_ownership('credit_card', {
                 end
                 return 0
             end
-            if rawget(_G,'G') and G.FUNCS and G.FUNCS.can_buy then
-                local orig_can_buy = G.FUNCS.can_buy
-                G.FUNCS.can_buy = function(e)
-                    local has_credit_card = false
-                    if G.jokers and G.jokers.cards then
-                        for i = 1, #G.jokers.cards do
-                            local j = G.jokers.cards[i]
-                            if j and j.ability and j.ability.name == 'Credit Card' and not j.debuff then
-                                has_credit_card = true
-                                break
-                            end
-                        end
-                    end
-                    
-                    if has_credit_card then
-                        local ref = e and e.config and e.config.ref_table
-                        if not ref then return orig_can_buy(e) end
-                        local cost_n = _cc_to_number(ref.cost)
-                        local dollars_n = _cc_to_number(rawget(_G,'G') and G.GAME and G.GAME.dollars)
-                        if (cost_n > dollars_n + 20) and (cost_n > 0) then
-                            e.config.colour = G.C.UI.BACKGROUND_INACTIVE
-                            e.config.button = nil
-                        else
-                            e.config.colour = G.C.ORANGE
-                            e.config.button = 'buy_from_shop'
-                        end
-                    else
-                        orig_can_buy(e)
-                    end
-                end
-            end
-
             if rawget(_G,'Card') and Card.set_cost then
                 local orig_set_cost = Card.set_cost
                 function Card:set_cost()
@@ -202,7 +170,7 @@ SMODS.Joker:take_ownership('credit_card', {
                                 local is_couponed = card_to_buy.ability.couponed
                                 
                                 if original_cost > 0 and not is_couponed then
-                                    orig_buy_from_shop(e)
+                                    if orig_buy_from_shop(e) == false then return false end
                                     
                                     credit_card.ability._vp_cc_shop_state = 'used'
                                     
@@ -492,7 +460,6 @@ SMODS.Joker:take_ownership('credit_card', {
                 end
             end
 
-            -- Unified cash_out handler registry (processes handlers in joker slot order)
             if not _G.VP_CASHOUT_HANDLERS then
                 _G.VP_CASHOUT_HANDLERS = {}
             end
@@ -550,3 +517,39 @@ SMODS.Joker:take_ownership('credit_card', {
     end
 
 apply_credit_card_patches()
+
+local function other_added_credit_cards(card)
+    local count = 0
+    for _, j in ipairs((G.jokers and G.jokers.cards) or {}) do
+        if j ~= card and j.added_to_deck and j.ability and j.ability.name == 'Credit Card' then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+if not rawget(_G, 'VR_CREDIT_CARD_DEBT_PATCHED') and rawget(_G, 'Card') then
+    _G.VR_CREDIT_CARD_DEBT_PATCHED = true
+
+    local orig_add_to_deck = Card.add_to_deck
+    function Card:add_to_deck(from_debuff)
+        local applies = self.ability and self.ability.name == 'Credit Card' and not self.added_to_deck
+        local others = applies and other_added_credit_cards(self) or 0
+        local ret = orig_add_to_deck(self, from_debuff)
+        if applies and others > 0 and G.GAME then
+            G.GAME.bankrupt_at = G.GAME.bankrupt_at + (self.ability.extra or 20)
+        end
+        return ret
+    end
+
+    local orig_remove_from_deck = Card.remove_from_deck
+    function Card:remove_from_deck(from_debuff)
+        local applies = self.ability and self.ability.name == 'Credit Card' and self.added_to_deck
+        local others = applies and other_added_credit_cards(self) or 0
+        local ret = orig_remove_from_deck(self, from_debuff)
+        if applies and others > 0 and G.GAME then
+            G.GAME.bankrupt_at = G.GAME.bankrupt_at - (self.ability.extra or 20)
+        end
+        return ret
+    end
+end

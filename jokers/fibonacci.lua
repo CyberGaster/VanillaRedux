@@ -1,14 +1,17 @@
+local FIB_MULT = 21
+local FIB_RANKS = { [14] = true, [2] = true, [3] = true, [5] = true, [8] = true, [13] = true }
+
 SMODS.Joker:take_ownership('fibonacci', {
     loc_txt = {
         name = 'Fibonacci',
         text = {
-            'Played {C:attention}Ace{}, {C:attention}2{}, {C:attention}3{}, {C:attention}5{}, or {C:attention}8{}',
-            'give {C:mult}+#1#{} Mult when scored',
+            'Played {C:attention}Ace{}, {C:attention}2{}, {C:attention}3{}, {C:attention}5{}, {C:attention}8{},',
+            'or {C:attention}King{} give {C:mult}+#1#{} Mult when scored',
         }
     },
-    config = { extra = 13 },
+    config = { extra = FIB_MULT },
     loc_vars = function(self, info_queue, card)
-        return { vars = { card.ability.extra } }
+        return { vars = { FIB_MULT } }
     end,
     blueprint_compat = true,
 })
@@ -20,7 +23,7 @@ if not rawget(_G, 'VP_FIB_OVERRIDE') and rawget(_G, 'Card') and Card.calculate_j
             if context and context.individual and context.cardarea == G.play
                and context.other_card and not context.other_card.debuff then
                 local cid = context.other_card:get_id()
-                if cid == 14 or cid == 2 or cid == 3 or cid == 5 or cid == 8 then
+                if FIB_RANKS[cid] then
                     local src = (context.blueprint_card or self)
                     src.ability = src.ability or {}
                     local round_id = tostring((G and G.GAME and G.GAME.round) or 0)
@@ -36,7 +39,7 @@ if not rawget(_G, 'VP_FIB_OVERRIDE') and rawget(_G, 'Card') and Card.calculate_j
                         seen[cid] = true
                         src.ability._vp_fib_seen = seen
                         return {
-                            mult = self.ability.extra,
+                            mult = FIB_MULT,
                             card = src
                         }
                     end

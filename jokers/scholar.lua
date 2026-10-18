@@ -1,4 +1,4 @@
-local DEFAULTS = { mult_step = 1, ace_mult = 1 }
+local SCHOLAR_GAIN = 4
 
 local function to_number_level(raw)
     if type(raw) == 'number' then return raw end
@@ -27,6 +27,7 @@ local function choose_hand_by_levels(card, seed_str)
             end
         end
     end
+    table.sort(weighted_hands, function(a, b) return a.hand < b.hand end)
 
     local last_hand = card and card.ability and card.ability.target_hand
     if #weighted_hands == 0 or total_weight <= 0 then
@@ -53,72 +54,78 @@ local function choose_hand_by_levels(card, seed_str)
     return weighted_hands[1].hand
 end
 
+local function current_mult(card)
+    local extra = card and card.ability and card.ability.extra
+    if type(extra) == 'table' then
+        return tonumber(extra.mult) or 0
+    end
+    return 0
+end
+
+local function hand_has_ace(scoring_hand)
+    for _, c in ipairs(scoring_hand or {}) do
+        if c and not c.debuff and c:get_id() == 14 then
+            return true
+        end
+    end
+    return false
+end
+
 SMODS.Joker:take_ownership('scholar', {
     loc_txt = {
         name = 'Scholar',
         text = {
-            'Played {C:attention}Aces{} give {C:mult}+#2#{} Mult when scored',
-            'Gains {C:mult}+1{} Mult when a {C:attention}#1#{} is played,',
-            'poker hand changes at end of round',
-            '{C:inactive}(Currently {C:mult}+#2#{} {C:inactive}Mult){}'
+            'This Joker gains {C:mult}+#1#{} Mult if played',
+            'hand is a {C:attention}#2#{} containing an {C:attention}Ace{},',
+            'poker hand changes when played',
+            '{C:inactive}(Currently {C:mult}+#3#{C:inactive} Mult)'
         }
     },
-    config = { extra = { mult_step = DEFAULTS.mult_step, ace_mult = DEFAULTS.ace_mult } },
+    config = { extra = { mult = 0 } },
     loc_vars = function(self, info_queue, card)
         local target = (card and card.ability and card.ability.target_hand) or 'High Card'
-        local ace = (card and card.ability and card.ability.ace_mult) or DEFAULTS.ace_mult
-        local ace_val = tonumber(ace) or DEFAULTS.ace_mult
-        local ace_str = tostring(math.floor(ace_val + 0.0001))
         local target_loc = target
         if rawget(_G,'localize') then
             local ok, loc = pcall(localize, target, 'poker_hands')
             if ok and loc then target_loc = loc end
         end
-        return { vars = { target_loc, ace_str } }
+        return { vars = { SCHOLAR_GAIN, target_loc, current_mult(card) } }
     end,
     set_ability = function(self, card, initial, delay_sprites)
         if not card or not card.ability then return end
-        card.ability.mult = card.ability.mult or 0
-        card.ability.mult_step = card.ability.mult_step or DEFAULTS.mult_step
-        card.ability.ace_mult = card.ability.ace_mult or DEFAULTS.ace_mult
+        if type(card.ability.extra) ~= 'table' then card.ability.extra = {} end
+        card.ability.extra.mult = tonumber(card.ability.extra.mult) or 0
         if not card.ability.target_hand then
             local seed = 'scholar_init_'..((G and G.GAME and G.GAME.round_resets and G.GAME.round_resets.ante) or 1)..'_'..(card.sort_id or 0)
             card.ability.target_hand = choose_hand_by_levels(card, seed)
         end
     end,
     calculate = function(self, card, context)
-        if context.setting_blind then
-            card.ability.changed_this_round = nil
-            return nil
-        end
         if context.before and context.scoring_name and not context.blueprint then
             if card.ability.target_hand and context.scoring_name == card.ability.target_hand then
-                card.ability.ace_mult = (card.ability.ace_mult or DEFAULTS.ace_mult) + (card.ability.mult_step or DEFAULTS.mult_step)
-                return nil
-            end
-        end
-        if context.after and not card.ability.changed_this_round then
-            local chip_total = (G.GAME and G.GAME.current_round and G.GAME.current_round.current_hand and G.GAME.current_round.current_hand.chip_total) or 0
-            local projected = (G.GAME and G.GAME.chips or 0) + (tonumber(chip_total) or 0)
-            local req = (G.GAME and G.GAME.blind and G.GAME.blind.chips) or math.huge
-            if projected >= req then
-                local seed = 'scholar_after_'..((G and G.GAME and G.GAME.round_resets and G.GAME.round_resets.ante) or 1)..'_'..(G and G.GAME and G.GAME.round or 0)..'_'..(card.sort_id or 0)
+                if type(card.ability.extra) ~= 'table' then card.ability.extra = {} end
+                local seed = 'scholar_next_'..((G and G.GAME and G.GAME.round) or 0)..'_'..((G and G.GAME and G.GAME.hands_played) or 0)..'_'..(card.sort_id or 0)
+                local upgraded = hand_has_ace(context.scoring_hand)
+                if upgraded then
+                    card.ability.extra.mult = current_mult(card) + SCHOLAR_GAIN
+                end
                 card.ability.target_hand = choose_hand_by_levels(card, seed)
-                card.ability.changed_this_round = true
-                return nil
+                if upgraded then
+                    return { message = localize('k_upgrade_ex'), colour = G.C.MULT, card = card }
+                end
+                return {}
             end
-        end
-        if context.individual and context.cardarea == G.play and context.other_card and not context.other_card.debuff then
-            if context.other_card:get_id() == 14 then
-                local amt = card.ability.ace_mult or DEFAULTS.ace_mult
-                if amt ~= 0 then return { mult = amt, card = card } end
-            end
-        end
-        if context.end_of_round and not card.ability.changed_this_round then
-            local seed = 'scholar_next_'..((G and G.GAME and G.GAME.round_resets and G.GAME.round_resets.ante) or 1)..'_'..(G and G.GAME and G.GAME.round or 0)..'_'..(card.sort_id or 0)
-            card.ability.target_hand = choose_hand_by_levels(card, seed)
-            card.ability.changed_this_round = true
             return nil
+        end
+        if context.individual and context.cardarea == G.play then
+            return {}
+        end
+        if context.joker_main then
+            local mult = current_mult(card)
+            if mult > 0 then
+                return { mult = mult }
+            end
+            return {}
         end
         return nil
     end,

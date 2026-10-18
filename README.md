@@ -12,8 +12,8 @@ Many jokers and other elements have been reworked and updated — familiar tacti
 - Updated and reworked 75 reworked vanilla jokers, 6 spectral and 2 tarot
 
 ## Requirements
-- [Steamodded](https://github.com/Steamodded/smods) ≥ `1.0.0-beta-1620a`
-- [Lovely](https://github.com/ethangreen-dev/lovely-injector) ≥ `0.9.0`
+- [Steamodded](https://github.com/Steamodded/smods) ≥ `SMODS v26.1002.0`
+- [Lovely](https://github.com/ethangreen-dev/lovely-injector) ≥ `0.10.0`
 
 ## Compatibility
 Tested with vanilla Balatro and [Talisman](https://github.com/MathIsFun0/Talisman). Other mods may cause conflicts — please report incompatibilities via [Issues](../../issues).

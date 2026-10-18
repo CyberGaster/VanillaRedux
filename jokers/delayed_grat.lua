@@ -19,7 +19,7 @@ local function update_sell_cost(card)
     
     local base = extra.base_sell or 1
     local stored = extra.stored_value or 0
-    local total = base + stored
+    local total = base + stored + (card.ability.extra_value or 0)
     
     card.sell_cost = math.max(1, math.ceil(total))
     card.sell_cost_label = card.sell_cost
@@ -119,7 +119,6 @@ SMODS.Joker:take_ownership('delayed_grat', {
                 end
             end
 
-            -- Register Delayed Gratification cash_out handler
             if not _G.VP_CASHOUT_HANDLERS then
                 _G.VP_CASHOUT_HANDLERS = {}
             end

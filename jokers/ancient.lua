@@ -6,18 +6,10 @@ SMODS.Joker:take_ownership('ancient', {
         text = {
             '{C:attention}Stone{} cards count as',
             'the same rank for poker hands',
-            'Each played {C:attention}Stone{} card',
-            'gives {X:mult,C:white}X1.25{} Mult when scored'
         }
     },
     calculate = function(self, card, context)
         if context.individual and context.cardarea == G.play then
-            if context.other_card and context.other_card.ability and context.other_card.ability.effect == 'Stone Card' then
-                return {
-                    x_mult = 1.25,
-                    colour = G.C.MULT
-                }
-            end
             return {}
         end
     end,

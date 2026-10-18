@@ -1,3 +1,13 @@
+
+local function counter_for(card, context)
+    local owner = context.blueprint and context.blueprint_card
+    if owner and owner ~= card and owner.ability then
+        owner.ability.vr_8ball_copy = owner.ability.vr_8ball_copy or { eights_count = 0, total_triggers = 0 }
+        return owner.ability.vr_8ball_copy, owner
+    end
+    return card.ability.extra, card
+end
+
 SMODS.Joker:take_ownership('8_ball', {
     loc_txt = {
         name = '8 Ball',
@@ -19,12 +29,13 @@ SMODS.Joker:take_ownership('8_ball', {
             and context.other_card:get_id() == 8
             and not context.other_card.debuff then
 
-            if card.ability.extra.total_triggers < 8 then
-                card.ability.extra.eights_count = card.ability.extra.eights_count + 1
+            local counter, owner = counter_for(card, context)
+            if counter.total_triggers < 8 then
+                counter.eights_count = counter.eights_count + 1
 
-                if card.ability.extra.eights_count >= 8 then
-                    card.ability.extra.total_triggers = card.ability.extra.total_triggers + 1
-                    card.ability.extra.eights_count = 0
+                if counter.eights_count >= 8 then
+                    counter.total_triggers = counter.total_triggers + 1
+                    counter.eights_count = 0
 
                     local free_slots = G.consumeables.config.card_limit - #G.consumeables.cards
                     local to_create = math.min(2, free_slots)
@@ -35,7 +46,7 @@ SMODS.Joker:take_ownership('8_ball', {
                         delay = 0.4,
                         func = function()
                             if to_create > 0 then
-                                card_eval_status_text(card, 'extra', nil, nil, nil, {
+                                card_eval_status_text(owner, 'extra', nil, nil, nil, {
                                     message = '+' .. to_create .. ' Tarot',
                                     colour = G.C.PURPLE
                                 })
@@ -53,7 +64,7 @@ SMODS.Joker:take_ownership('8_ball', {
                                     end
                                 }))
                             else
-                                card_eval_status_text(card, 'extra', nil, nil, nil, {
+                                card_eval_status_text(owner, 'extra', nil, nil, nil, {
                                     message = localize('k_no_room_ex'),
                                     colour = G.C.RED
                                 })
@@ -63,11 +74,12 @@ SMODS.Joker:take_ownership('8_ball', {
                     }
                 else
                     return {
-                        message = card.ability.extra.eights_count .. '/8',
+                        message = counter.eights_count .. '/8',
                         colour = G.C.CHIPS
                     }
                 end
             end
+            return {}
         end
     end
 })

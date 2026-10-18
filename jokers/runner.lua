@@ -2,10 +2,11 @@ SMODS.Joker:take_ownership('runner', {
     loc_txt = {
         name = 'Runner',
         text = {
-            'Get {C:chips}+#2#{} chips if played',
+            'Gains {C:chips}+15{} Chips if played',
             'hand contains a {C:attention}Straight{}',
-            'Joker gains {C:chips}+5{} Chips for',
-            'each next played {C:attention}Straight{}',
+            'Gain increases by {C:chips}+5{} for',
+            'each subsequent {C:attention}Straight{}',
+            '{C:inactive}(Next gain: {C:chips}+#2#{C:inactive})',
             '{C:inactive}(Currently {C:chips}+#1#{C:inactive} Chips)'
         }
     },
@@ -44,7 +45,7 @@ SMODS.Joker:take_ownership('runner', {
             return {}
         end
         if context.joker_main then
-            if has_straight and card.ability.extra.chips > 0 then
+            if card.ability.extra.chips > 0 then
                 return {
                     chip_mod = card.ability.extra.chips,
                     message = localize{type='variable', key='a_chips', vars={card.ability.extra.chips}}

@@ -86,6 +86,13 @@ local MOD_FILES = {
 
 print('Vanilla Redux: Loading main file...')
 
+SMODS.Atlas {
+    key = 'modicon',
+    px = 32,
+    py = 32,
+    path = 'modicon.png'
+}
+
 for _, path in ipairs(MOD_FILES) do
     local chunk, err = SMODS.load_file(path)
     if chunk then

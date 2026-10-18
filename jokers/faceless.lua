@@ -14,12 +14,25 @@ local function active_faceless()
     if G and G.jokers and G.jokers.cards then
         for i = 1, #G.jokers.cards do
             local joker = G.jokers.cards[i]
-            if joker and joker.config and joker.config.center and joker.config.center.key == 'j_faceless' and not joker.debuff then
+            if joker and not joker.removed and joker.config and joker.config.center and joker.config.center.key == 'j_faceless' and not joker.debuff then
                 return joker
             end
         end
     end
     return nil
+end
+
+local function recalc_face_debuffs()
+    G.E_MANAGER:add_event(Event({
+        func = function()
+            if G.GAME and G.GAME.blind and G.playing_cards then
+                for _, v in ipairs(G.playing_cards) do
+                    if is_face_card(v) then G.GAME.blind:debuff_card(v) end
+                end
+            end
+            return true
+        end
+    }))
 end
 
 if not rawget(_G, 'VR_FACELESS_DEBUFF') then
@@ -47,7 +60,7 @@ SMODS.Joker:take_ownership('faceless', {
         }
     },
     cost = 5,
-    rarity = 2,
+    rarity = 1,
     blueprint_compat = true,
     config = { extra = { num_played = 0 } },
     loc_vars = function(self, info_queue, card)
@@ -58,6 +71,10 @@ SMODS.Joker:take_ownership('faceless', {
         return { vars = { num_played % 3 } }
     end,
     calculate = function(self, card, context)
+        if context.discard then
+            return {}
+        end
+
         if context.repetition and context.cardarea == G.play and context.other_card then
             local played_card = context.other_card
             if is_number_card(played_card) and not played_card.debuff then
@@ -79,6 +96,12 @@ SMODS.Joker:take_ownership('faceless', {
                 card.ability.extra.num_played = 0
             end
         end
+    end,
+    add_to_deck = function(self, card, from_debuff)
+        recalc_face_debuffs()
+    end,
+    remove_from_deck = function(self, card, from_debuff)
+        recalc_face_debuffs()
     end,
     set_ability = function(self, card, initial, delay_sprites)
         card.ability.extra = card.ability.extra or {}

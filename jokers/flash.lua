@@ -14,6 +14,10 @@ SMODS.Joker:take_ownership('flash', {
         return { vars = { mult } }
     end,
     calculate = function(self, card, context)
+        if context.reroll_shop then
+            return {}
+        end
+
         if context.joker_main then
             if card.ability.extra.mult > 0 then
                 return {

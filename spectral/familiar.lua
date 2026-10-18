@@ -90,6 +90,8 @@ SMODS.Consumable:take_ownership('c_familiar', {
                     return true
                 end
             }))
+            delay(0.3)
+            SMODS.calculate_context({ remove_playing_cards = true, removed = { destroyed_card } })
         end
     end,
 })

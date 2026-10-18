@@ -41,14 +41,15 @@ SMODS.Joker:take_ownership('marble', {
                 end
             }))
             draw_card(G.play, G.deck, 90, 'up', nil)
+            playing_card_joker_effects({true})
         end
 
-        if context.setting_blind and not context.blueprint and not sliced then
+        if context.setting_blind and not sliced then
             add_stone_card_with_edition()
             return {
                 message = localize('k_plus_stone'),
                 colour = G.C.SECONDARY_SET.Enhanced,
-                card = card
+                card = context.blueprint_card or card
             }
         end
 

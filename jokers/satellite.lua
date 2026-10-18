@@ -13,15 +13,8 @@ SMODS.Joker:take_ownership('satellite', {
     blueprint_compat = false,
     loc_vars = function(self, info_queue, card)
         local unique = 0
-        local big = rawget(_G, 'to_big')
-        if G.GAME and G.GAME.hands then
-            for _, v in pairs(G.GAME.hands) do
-                if v.visible then
-                    local lvl = big and big(v.level) or v.level
-                    local one = big and big(1) or 1
-                    if lvl > one then unique = unique + 1 end
-                end
-            end
+        for _, v in pairs((G.GAME and G.GAME.consumeable_usage) or {}) do
+            if v.set == 'Planet' then unique = unique + 1 end
         end
         return { vars = { card.ability.extra, card.ability.extra * unique } }
     end,

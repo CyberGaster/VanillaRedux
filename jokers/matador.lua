@@ -1,3 +1,5 @@
+local MATADOR_REWARD = 16
+
 SMODS.Joker:take_ownership('matador', {
     loc_txt = {
         name = 'Matador',
@@ -7,11 +9,15 @@ SMODS.Joker:take_ownership('matador', {
             'Earn {C:money}$#2#{} when {C:attention}Boss Blind{} is defeated',
         }
     },
-    config = { extra = { xmult_per_heart = 1.5, boss_reward = 12 } },
+    config = { extra = { xmult_per_heart = 1.5, boss_reward = MATADOR_REWARD } },
     loc_vars = function(self, info_queue, card)
-        return { vars = { card.ability.extra.xmult_per_heart, card.ability.extra.boss_reward } }
+        return { vars = { card.ability.extra.xmult_per_heart, MATADOR_REWARD } }
     end,
     calculate = function(self, card, context)
+        if context.debuffed_hand or context.joker_main then
+            return {}
+        end
+
         local is_boss = G.GAME.blind and G.GAME.blind.boss
 
         if context.setting_blind and is_boss and not context.blueprint then
@@ -41,7 +47,7 @@ SMODS.Joker:take_ownership('matador', {
     calc_dollar_bonus = function(self, card)
         if card.ability.extra._boss_defeated then
             card.ability.extra._boss_defeated = nil
-            return card.ability.extra.boss_reward
+            return MATADOR_REWARD
         end
     end,
 })

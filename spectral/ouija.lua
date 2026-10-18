@@ -1,3 +1,5 @@
+local get_ouija_stacks
+
 SMODS.Consumable:take_ownership('c_ouija', {
     loc_txt = {
         name = 'Ouija',
@@ -50,22 +52,38 @@ SMODS.Consumable:take_ownership('c_ouija', {
         end
         delay(0.5)
 
-        G.GAME._vp_ouija_temp = G.GAME._vp_ouija_temp or { rounds_left = 0, applied_round = -1 }
-        G.GAME._vp_ouija_temp.rounds_left = (G.GAME._vp_ouija_temp.rounds_left or 0) + 3
+        local stacks = get_ouija_stacks()
+        stacks[#stacks + 1] = { rounds_left = 3, applied_round = -1 }
     end,
 })
 
+get_ouija_stacks = function()
+    local state = G.GAME._vp_ouija_temp or {}
+    if not state.stacks then
+        local legacy_rounds = state.rounds_left or 0
+        state = { stacks = {} }
+        if legacy_rounds > 0 then
+            state.stacks[1] = { rounds_left = legacy_rounds, applied_round = G.GAME._vp_ouija_temp.applied_round or -1 }
+        end
+        G.GAME._vp_ouija_temp = state
+    end
+    return state.stacks
+end
+
 local orig_draw_to_hand = Game.update_draw_to_hand
 function Game:update_draw_to_hand(dt)
-    if G.GAME and G.hand then
-        local mod = G.GAME._vp_ouija_temp
-        if mod and (mod.rounds_left or 0) > 0 then
-            local current_round = G.GAME.round or 0
-            if mod.applied_round ~= current_round then
+    if G.GAME and G.hand and G.GAME._vp_ouija_temp then
+        local stacks = get_ouija_stacks()
+        local current_round = G.GAME.round or 0
+        for i = #stacks, 1, -1 do
+            local stack = stacks[i]
+            if stack.rounds_left > 0 and stack.applied_round ~= current_round then
                 G.hand:change_size(-1)
                 G.GAME.round_resets.temp_handsize = (G.GAME.round_resets.temp_handsize or 0) - 1
-                mod.applied_round = current_round
-                mod.rounds_left = mod.rounds_left - 1
+                stack.applied_round = current_round
+                stack.rounds_left = stack.rounds_left - 1
+            elseif stack.rounds_left <= 0 and stack.applied_round ~= current_round then
+                table.remove(stacks, i)
             end
         end
     end

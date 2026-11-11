@@ -5,8 +5,8 @@ SMODS.Joker:take_ownership('fibonacci', {
     loc_txt = {
         name = 'Fibonacci',
         text = {
-            'Played {C:attention}Ace{}, {C:attention}2{}, {C:attention}3{}, {C:attention}5{}, {C:attention}8{},',
-            'or {C:attention}King{} give {C:mult}+#1#{} Mult when scored',
+            'Played {C:attention}Ace{}, {C:attention}2{}, {C:attention}3{}, {C:attention}5{}, {C:attention}8{} or {C:attention}King{},',
+            'give {C:mult}+#1#{} Mult when scored',
         }
     },
     config = { extra = FIB_MULT },
@@ -34,10 +34,15 @@ if not rawget(_G, 'VP_FIB_OVERRIDE') and rawget(_G, 'Card') and Card.calculate_j
                         src.ability._vp_fib_mark = mark
                         src.ability._vp_fib_seen = {}
                     end
+                    -- The first card of a rank claims it. A retrigger scores that same card again and
+                    -- repeats the bonus; a second card of the same rank gets nothing.
                     local seen = src.ability._vp_fib_seen or {}
-                    if not seen[cid] then
-                        seen[cid] = true
+                    local scored_id = context.other_card.sort_id or tostring(context.other_card)
+                    if seen[cid] == nil then
+                        seen[cid] = scored_id
                         src.ability._vp_fib_seen = seen
+                    end
+                    if seen[cid] == scored_id then
                         return {
                             mult = FIB_MULT,
                             card = src

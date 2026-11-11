@@ -1,11 +1,14 @@
+-- Face and number cards are read through get_id/is_face, so Pareidolia (every ranked card is a face
+-- card) and Stone Cards (no rank) are treated the same way as everywhere else in the game.
 local function is_number_card(card)
     if not card or not card.base then return false end
-    local rank_id = card.base.id
-    return rank_id and rank_id >= 2 and rank_id <= 10
+    local rank_id = card.get_id and card:get_id() or card.base.id
+    return rank_id ~= nil and rank_id >= 2 and rank_id <= 10
 end
 
 local function is_face_card(card)
     if not card or not card.base then return false end
+    if card.is_face then return card:is_face(true) and true or false end
     local rank_id = card.base.id
     return rank_id == 11 or rank_id == 12 or rank_id == 13
 end
@@ -27,7 +30,7 @@ local function recalc_face_debuffs()
         func = function()
             if G.GAME and G.GAME.blind and G.playing_cards then
                 for _, v in ipairs(G.playing_cards) do
-                    if is_face_card(v) then G.GAME.blind:debuff_card(v) end
+                    G.GAME.blind:debuff_card(v)
                 end
             end
             return true
@@ -47,6 +50,22 @@ if not rawget(_G, 'VR_FACELESS_DEBUFF') then
             end
         end
     end
+end
+
+-- The Joker and each Blueprint/Brainstorm copy see the same scored card. The first one counts it,
+-- the others reuse that count, so the result does not depend on Joker order.
+local counted = setmetatable({}, { __mode = 'k' })
+
+local function count_scored_card(card, context)
+    local extra = card.ability.extra
+    local hand = context.scoring_hand
+    if hand == nil and G and G.GAME and G.GAME.current_round then hand = G.GAME.current_round.hands_played end
+    local seen = counted[card]
+    if not (seen and seen.hand == hand and seen.card == context.other_card) then
+        extra.num_played = (extra.num_played or 0) + 1
+        counted[card] = { hand = hand, card = context.other_card }
+    end
+    return extra.num_played
 end
 
 SMODS.Joker:take_ownership('faceless', {
@@ -78,10 +97,7 @@ SMODS.Joker:take_ownership('faceless', {
         if context.repetition and context.cardarea == G.play and context.other_card then
             local played_card = context.other_card
             if is_number_card(played_card) and not played_card.debuff then
-                if not context.blueprint_card then
-                    card.ability.extra.num_played = (card.ability.extra.num_played or 0) + 1
-                end
-                if card.ability.extra.num_played % 3 == 0 then
+                if count_scored_card(card, context) % 3 == 0 then
                     return {
                         message = localize('k_again_ex'),
                         repetitions = 1,
@@ -94,6 +110,7 @@ SMODS.Joker:take_ownership('faceless', {
         if context.end_of_round and not context.repetition and not context.individual then
             if not context.blueprint then
                 card.ability.extra.num_played = 0
+                counted[card] = nil
             end
         end
     end,

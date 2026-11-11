@@ -41,9 +41,10 @@ function Card:calculate_joker(context)
         end
         local saved = context.blueprint
         context.blueprint = true
-        local r = _orig_calc(self, context)
+        local ok, r, post = pcall(_orig_calc, self, context)
         context.blueprint = saved
-        return r
+        if not ok then error(r, 0) end
+        return r, post
     end
     return _orig_calc(self, context)
 end

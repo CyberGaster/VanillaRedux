@@ -5,15 +5,17 @@ SMODS.Joker:take_ownership('marble', {
             'Adds one {C:attention}Stone{} card to deck',
             'when {C:attention}Blind{} is selected and',
             'when {C:attention}Blind{} is defeated',
-            '{C:green}#1# in 4{} chance each {C:attention}Stone{}',
+            '{C:green}#1# in #2#{} chance each {C:attention}Stone{}',
             'card gains a random {C:edition}Edition{}'
         }
     },
     loc_vars = function(self, info_queue, card)
-        return { vars = { ''..(G.GAME and G.GAME.probabilities.normal or 1) } }
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, 4, 'vr_marble')
+        return { vars = { numerator, denominator } }
     end,
     calculate = function(self, card, context)
-        local sliced = (context.blueprint_card or card).getting_sliced
+        local owner = context.blueprint_card or card
+        local sliced = owner.getting_sliced
 
         local function add_stone_card_with_edition()
             G.E_MANAGER:add_event(Event({
@@ -22,7 +24,7 @@ SMODS.Joker:take_ownership('marble', {
                     G.playing_card = (G.playing_card and G.playing_card + 1) or 1
                     local stone_card = Card(G.play.T.x + G.play.T.w/2, G.play.T.y, G.CARD_W, G.CARD_H, front, G.P_CENTERS.m_stone, {playing_card = G.playing_card})
 
-                    if pseudorandom('marble_edition') < ((G.GAME.probabilities.normal or 1) / 4) then
+                    if SMODS.pseudorandom_probability(owner, 'marble_edition', 1, 4, 'vr_marble') then
                         local editions = {'foil', 'holo', 'polychrome'}
                         local random_edition = pseudorandom_element(editions, pseudoseed('marble_ed'))
                         stone_card:set_edition({[random_edition] = true})
@@ -31,6 +33,7 @@ SMODS.Joker:take_ownership('marble', {
                     stone_card:start_materialize({G.C.SECONDARY_SET.Enhanced})
                     G.play:emplace(stone_card)
                     table.insert(G.playing_cards, stone_card)
+                    playing_card_joker_effects({stone_card})
                     return true
                 end
             }))
@@ -41,7 +44,6 @@ SMODS.Joker:take_ownership('marble', {
                 end
             }))
             draw_card(G.play, G.deck, 90, 'up', nil)
-            playing_card_joker_effects({true})
         end
 
         if context.setting_blind and not sliced then

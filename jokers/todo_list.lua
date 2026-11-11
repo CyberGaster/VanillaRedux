@@ -4,16 +4,13 @@ end
 
 
 local function rand01(seed)
-    local s = tostring(seed or 'todo')
-    if rawget(_G, 'pseudoseed') then
-        local ok, v = pcall(pseudoseed, s)
-        if ok and type(v) == 'number' then
-            v = v % 1; if v < 0 then v = v + 1 end
-            return v
-        end
+    local key = tostring(seed or 'todo')
+    if rawget(_G, 'pseudorandom') and rawget(_G, 'G') and G.GAME and G.GAME.pseudorandom then
+        local ok, v = pcall(pseudorandom, key)
+        if ok and type(v) == 'number' then return v end
     end
     local h = 0
-    for i = 1, #s do h = (h * 31 + s:byte(i)) % 0x100000000 end
+    for i = 1, #key do h = (h * 31 + key:byte(i)) % 0x100000000 end
     h = (1664525 * h + 1013904223) % 0x100000000
     return h / 0x100000000
 end
@@ -92,13 +89,14 @@ local function get_game_ctx()
         ante = 1, stake = 1,
         hands = 4, discards = 3,
         rounds_left = 3,
+        in_round = false, hands_left = 4, discards_left = 3,
         deck_back = 'default',
         has_faces = true,
     }
     if not rawget(_G, 'G') or not G.GAME then return ctx end
 
     local rr = G.GAME.round_resets or {}
-    ctx.ante = tonumber(rr.ante) or 1
+    ctx.ante = VanillaRedux.to_number(rr.ante, 1)
     ctx.stake = tonumber(G.GAME.stake) or 1
     ctx.hands = tonumber(rr.hands) or 4
     ctx.discards = tonumber(rr.discards) or 3
@@ -108,8 +106,15 @@ local function get_game_ctx()
     for _, k in ipairs({'Small','Big','Boss'}) do
         local st = states[k] or 'Upcoming'
         if st == 'Current' or st == 'Upcoming' or st == 'Select' then r = r + 1 end
+        if st == 'Current' then ctx.in_round = true end
     end
     ctx.rounds_left = math.max(1, r)
+
+    local cr = G.GAME.current_round
+    if ctx.in_round and cr then
+        ctx.hands_left = tonumber(cr.hands_left) or ctx.hands
+        ctx.discards_left = tonumber(cr.discards_left) or ctx.discards
+    end
 
     if G.GAME.selected_back and G.GAME.selected_back.name then
         ctx.deck_back = G.GAME.selected_back.name
@@ -132,39 +137,17 @@ local HAND_DIFFICULTY = {
     ['Five of a Kind'] = 5, ['Flush Five'] = 5,
 }
 
-local HAND_PARENTS = {
-    ['Flush House']    = { 'Full House', 'Flush' },
-    ['Royal Flush']    = { 'Straight Flush', 'Flush', 'Straight' },
-    ['Straight Flush'] = { 'Flush', 'Straight' },
-    ['Flush Five']     = { 'Flush', 'Five of a Kind' },
-    ['Five of a Kind'] = { 'Four of a Kind', 'Three of a Kind' },
-    ['Four of a Kind'] = { 'Three of a Kind' },
-    ['Full House']     = { 'Three of a Kind', 'Pair', 'Two Pair' },
-    ['Flush']          = {},
-    ['Straight']       = {},
-    ['Three of a Kind']= { 'Pair' },
-    ['Two Pair']       = { 'Pair' },
-    ['Pair']           = { 'High Card' },
-}
-
-local function hand_matches(played, target)
-    if played == target then return true end
-    local parents = HAND_PARENTS[played]
-    if parents then
-        for _, p in ipairs(parents) do
-            if p == target then return true end
-        end
-    end
-    return false
-end
-
 local function pick_poker_hand(seed)
     if not G or not G.GAME or not G.GAME.hands then return 'High Card' end
     local pool, total = {}, 0
-    for name, data in pairs(G.GAME.hands) do
+    local hand_names = {}
+    for hand_name in pairs(G.GAME.hands) do hand_names[#hand_names + 1] = hand_name end
+    table.sort(hand_names)
+    for _, name in ipairs(hand_names) do
+        local data = G.GAME.hands[name]
         if data and data.visible ~= false then
-            local lvl = tonumber(data.level) or 1
-            local played = tonumber(data.played) or 0
+            local lvl = VanillaRedux.to_number(data.level, 1)
+            local played = VanillaRedux.to_number(data.played, 0)
             local w = math.max(1, lvl) * (played + 1)
             pool[#pool + 1] = { name = name, w = w }
             total = total + w
@@ -184,7 +167,7 @@ local function poker_hand_count(hand_name, total_hands, seed)
     local tier = HAND_DIFFICULTY[hand_name] or 3
     local played = 0
     if G and G.GAME and G.GAME.hands and G.GAME.hands[hand_name] then
-        played = tonumber(G.GAME.hands[hand_name].played) or 0
+        played = VanillaRedux.to_number(G.GAME.hands[hand_name].played, 0)
     end
     local lo, hi
     if tier <= 1 then
@@ -206,15 +189,43 @@ local function poker_hand_count(hand_name, total_hands, seed)
     return wrand(lo, hi, seed)
 end
 
+local function clamp_range(lo, hi, cap)
+    cap = math.floor(cap)
+    hi = math.min(hi, cap)
+    lo = math.min(lo, hi)
+    return lo, hi
+end
+
+local function cards_per_discard()
+    local params = rawget(_G, 'G') and G.GAME and G.GAME.starting_params
+    local limit = tonumber(params and params.discard_limit) or 5
+    return math.max(1, math.min(4, math.floor(limit)))
+end
+
+local function can_skip_blind(ctx)
+    if ctx.rounds_left <= 1 or not (G and G.GAME and G.GAME.round_resets) then return false end
+    local states = G.GAME.round_resets.blind_states or {}
+    if states.Boss == 'Current' then return false end
+    for _, k in ipairs({ 'Small', 'Big' }) do
+        local st = states[k] or 'Upcoming'
+        if st == 'Select' or st == 'Upcoming' then return true end
+    end
+    return false
+end
+
 local function generate_tasks(card)
     local ctx = get_game_ctx()
     local stats = get_deck_stats()
-    local seed = 'todo_' .. (card and card.sort_id or 0) .. '_' .. ctx.ante .. '_' .. ctx.stake
+    local seed = 'todo_' .. ctx.ante .. '_' .. ctx.stake
 
     local diff = 1.0 + (ctx.stake - 1) * 0.07
+    local ante_scale = math.max(1, 0.8 + ctx.ante * 0.1)
 
-    local total_hands = ctx.hands * ctx.rounds_left
-    local total_discards = ctx.discards * ctx.rounds_left
+    -- What can really still be done: the rest of the round in progress, if any, plus every full round after it.
+    local upcoming_rounds = ctx.rounds_left - (ctx.in_round and 1 or 0)
+    local total_hands = upcoming_rounds * ctx.hands + (ctx.in_round and ctx.hands_left or 0)
+    local total_discards = upcoming_rounds * ctx.discards + (ctx.in_round and ctx.discards_left or 0)
+    local hands_before_boss = total_hands - (ctx.boss_upcoming and ctx.hands or 0)
 
     if ctx.boss_upcoming and ctx.boss_key then
         if ctx.boss_key == 'bl_needle' then
@@ -224,59 +235,70 @@ local function generate_tasks(card)
             total_discards = total_discards - ctx.discards
         end
     end
+
+    local skip_blind = can_skip_blind(ctx) and rand01(seed .. '_skip') < 0.1
+    if skip_blind then
+        total_hands = total_hands - ctx.hands
+        total_discards = total_discards - ctx.discards
+        hands_before_boss = hands_before_boss - ctx.hands
+    end
+
     total_hands = math.max(1, total_hands)
     total_discards = math.max(0, total_discards)
-
-    local ante_scale = math.max(1, 0.8 + ctx.ante * 0.1)
+    hands_before_boss = math.max(0, hands_before_boss)
+    local discard_cap = total_discards * cards_per_discard()
 
     local candidates = {}
     local function push(t) candidates[#candidates + 1] = t end
 
     local h_lo = math.max(3, math.floor(total_hands * 0.5 * diff * ante_scale))
     local h_hi = math.max(h_lo + 1, math.floor(total_hands * 0.85 * diff))
-    h_hi = math.min(h_hi, total_hands)
+    h_lo, h_hi = clamp_range(h_lo, h_hi, total_hands)
     push({ type = 'hands', needed = wrand(h_lo, h_hi, seed .. '_h') })
 
     if total_discards > 0 then
         local d_lo = math.max(2, math.floor(total_discards * 0.4 * diff * ante_scale))
         local d_hi = math.max(d_lo + 1, math.floor(total_discards * 0.75 * diff))
-        d_hi = math.min(d_hi, total_discards)
+        d_lo, d_hi = clamp_range(d_lo, d_hi, total_discards)
         push({ type = 'discards', needed = wrand(d_lo, d_hi, seed .. '_d') })
     end
 
     local target_hand = pick_poker_hand(seed .. '_ph')
     local ph_needed = poker_hand_count(target_hand, total_hands, seed .. '_pn')
     if ctx.boss_upcoming and ctx.boss_key == 'bl_eye' then
-        local non_boss_hands = ctx.hands * math.max(0, ctx.rounds_left - 1)
-        ph_needed = math.min(ph_needed, non_boss_hands + 1)
+        ph_needed = math.min(ph_needed, hands_before_boss + 1)
+    end
+    if skip_blind then
+        ph_needed = math.min(ph_needed, math.max(1, math.floor(total_hands * 0.35)))
     end
     push({ type = 'poker_hand', needed = ph_needed, target_hand = target_hand })
 
     if ctx.has_faces and stats.face > 0 and total_discards > 0 then
-        local cap = math.min(stats.face, total_discards * 4)
+        local cap = math.min(stats.face, discard_cap)
         local f_lo = math.max(2, math.floor(cap * 0.3 * ante_scale))
         local f_hi = math.max(f_lo, math.floor(cap * 0.6 * diff))
-        f_hi = math.min(f_hi, cap)
+        f_lo, f_hi = clamp_range(f_lo, f_hi, cap)
         push({ type = 'discard_face', needed = wrand(f_lo, f_hi, seed .. '_df') })
     end
 
     if stats.number > 0 and total_discards > 0 then
-        local cap = math.min(stats.number, total_discards * 4)
+        local cap = math.min(stats.number, discard_cap)
         local n_lo = math.max(2, math.floor(cap * 0.3 * ante_scale))
         local n_hi = math.max(n_lo, math.floor(cap * 0.6 * diff))
-        n_hi = math.min(n_hi, cap)
+        n_lo, n_hi = clamp_range(n_lo, n_hi, cap)
         push({ type = 'discard_number', needed = wrand(n_lo, n_hi, seed .. '_dn') })
     end
 
     local best_suit, best_cnt = nil, 0
-    for suit, cnt in pairs(stats.suits) do
+    for _, suit in ipairs({ 'Hearts', 'Diamonds', 'Clubs', 'Spades' }) do
+        local cnt = stats.suits[suit] or 0
         if cnt > best_cnt then best_suit, best_cnt = suit, cnt end
     end
     if best_suit and best_cnt > 0 and total_discards > 0 then
-        local cap = math.min(best_cnt, total_discards * 4)
+        local cap = math.min(best_cnt, discard_cap)
         local s_lo = math.max(2, math.floor(cap * 0.25 * ante_scale))
         local s_hi = math.max(s_lo, math.floor(cap * 0.5 * diff))
-        s_hi = math.min(s_hi, cap)
+        s_lo, s_hi = clamp_range(s_lo, s_hi, cap)
         push({ type = 'discard_suit', suit = best_suit, needed = wrand(s_lo, s_hi, seed .. '_ds') })
     end
 
@@ -295,6 +317,7 @@ local function generate_tasks(card)
     if other_jokers > 0 then
         local j_lo = math.max(2, math.floor(other_jokers * total_hands * 0.3))
         local j_hi = math.max(j_lo, math.floor(other_jokers * total_hands * 0.7))
+        j_lo, j_hi = clamp_range(j_lo, j_hi, other_jokers * total_hands)
         push({ type = 'jokers', needed = wrand(j_lo, j_hi, seed .. '_jk') })
     end
 
@@ -305,39 +328,8 @@ local function generate_tasks(card)
         push({ type = 'consumables', needed = wrand(c_lo, c_hi, seed .. '_cs') })
     end
 
-    local can_skip = false
-    if ctx.rounds_left > 1 and G.GAME and G.GAME.round_resets then
-        local bs = G.GAME.round_resets.blind_states or {}
-        local boss = bs.Boss or 'Upcoming'
-        if boss ~= 'Current' then
-            can_skip = (bs.Small == 'Select' or bs.Small == 'Current' or bs.Small == 'Upcoming')
-                    or (bs.Big == 'Select' or bs.Big == 'Current' or bs.Big == 'Upcoming')
-        end
-    end
-    if can_skip and rand01(seed .. '_skip') < 0.1 then
+    if skip_blind then
         push({ type = 'skip_blind', needed = 1 })
-    end
-
-    local has_skip = false
-    for _, c in ipairs(candidates) do
-        if c.type == 'skip_blind' then has_skip = true; break end
-    end
-    if has_skip and ctx.rounds_left > 1 then
-        local reduced_hands = ctx.hands * (ctx.rounds_left - 1)
-        local reduced_discards = ctx.discards * (ctx.rounds_left - 1)
-        for _, c in ipairs(candidates) do
-            if c.type == 'hands' then
-                local rh_lo = math.max(3, math.floor(reduced_hands * 0.5 * diff * ante_scale))
-                local rh_hi = math.max(rh_lo + 1, math.floor(reduced_hands * 0.85 * diff))
-                c.needed = math.min(c.needed, wrand(rh_lo, math.min(rh_hi, reduced_hands), seed .. '_h_adj'))
-            elseif c.type == 'discards' then
-                local rd_lo = math.max(2, math.floor(reduced_discards * 0.4 * diff * ante_scale))
-                local rd_hi = math.max(rd_lo + 1, math.floor(reduced_discards * 0.75 * diff))
-                c.needed = math.min(c.needed, wrand(rd_lo, math.min(rd_hi, reduced_discards), seed .. '_d_adj'))
-            elseif c.type == 'poker_hand' then
-                c.needed = math.min(c.needed, math.max(1, math.floor(reduced_hands * 0.35)))
-            end
-        end
     end
 
     shuffle(candidates, seed .. '_shuf')
@@ -364,7 +356,7 @@ local function generate_tasks(card)
     end
     while #tasks > 5 do table.remove(tasks) end
     while #tasks < 5 do
-        tasks[#tasks + 1] = { type = 'hands', needed = math.max(2, math.floor(total_hands * 0.5)) }
+        tasks[#tasks + 1] = { type = 'hands', needed = math.min(total_hands, math.max(2, math.floor(total_hands * 0.5))) }
     end
 
     for _, t in ipairs(tasks) do
@@ -440,6 +432,25 @@ local function sync_loc(self, tasks)
     end
 end
 
+local function run_is_live()
+    return G and G.STAGES and G.STAGE == G.STAGES.RUN
+        and G.GAME and G.GAME.round_resets and not G.OVERLAY_MENU
+end
+
+local function example_tasks()
+    local tasks = {
+        { type = 'hands', needed = 8 },
+        { type = 'discards', needed = 4 },
+        { type = 'poker_hand', needed = 2, target_hand = 'Flush' },
+        { type = 'discard_face', needed = 6 },
+        { type = 'consumables', needed = 2 },
+    }
+    for _, t in ipairs(tasks) do
+        t.current = 0; t.completed = false
+    end
+    return tasks
+end
+
 SMODS.Joker:take_ownership('todo_list', {
     loc_txt = {
         name = 'To Do List',
@@ -452,16 +463,16 @@ SMODS.Joker:take_ownership('todo_list', {
     },
     config = { extra = { to_do_poker_hand = 'High Card', dollars = 4 } },
     loc_vars = function(self, info_queue, card)
-        local tasks = card and card.ability and card.ability.todo_tasks
-        if tasks then sync_loc(self, tasks) end
-        return { vars = { card.ability.todo_reward or 20 } }
+        local tasks = (card and card.ability and card.ability.todo_tasks) or example_tasks()
+        sync_loc(self, tasks)
+        return { vars = { (card and card.ability and card.ability.todo_reward) or 20 } }
     end,
 
     set_ability = function(self, card, initial, delay_sprites)
         card.ability.todo_reward = card.ability.todo_reward or 20
-        if initial then
+        if initial and run_is_live() then
             card.ability.todo_tasks = generate_tasks(card)
-            card.ability.todo_ante = (G and G.GAME and G.GAME.round_resets and G.GAME.round_resets.ante) or 1
+            card.ability.todo_ante = (G and G.GAME and G.GAME.round_resets and VanillaRedux.to_number(G.GAME.round_resets.ante, 1)) or 1
             card.ability.todo_reward_claimed = false
             sync_loc(self, card.ability.todo_tasks)
         end
@@ -472,15 +483,15 @@ SMODS.Joker:take_ownership('todo_list', {
 
         if not card.ability.todo_tasks then
             card.ability.todo_tasks = generate_tasks(card)
-            card.ability.todo_ante = (G and G.GAME and G.GAME.round_resets and G.GAME.round_resets.ante) or 1
+            card.ability.todo_ante = (G and G.GAME and G.GAME.round_resets and VanillaRedux.to_number(G.GAME.round_resets.ante, 1)) or 1
             card.ability.todo_reward_claimed = false
             sync_loc(self, card.ability.todo_tasks)
         end
 
         local tasks = card.ability.todo_tasks
 
-        local cur_ante = (G and G.GAME and G.GAME.round_resets and tonumber(G.GAME.round_resets.ante)) or 1
-        if tonumber(card.ability.todo_ante or 0) ~= cur_ante then
+        local cur_ante = (G and G.GAME and G.GAME.round_resets and VanillaRedux.to_number(G.GAME.round_resets.ante, 1)) or 1
+        if cur_ante > VanillaRedux.to_number(card.ability.todo_ante, 0) then
             card.ability.todo_tasks = generate_tasks(card)
             card.ability.todo_ante = cur_ante
             card.ability.todo_reward_claimed = false
@@ -508,15 +519,15 @@ SMODS.Joker:take_ownership('todo_list', {
 
         if context.joker_main then
             for _, t in ipairs(tasks) do
-                if t.type == 'hands' and not t.completed then advance(t); break end
+                if t.type == 'hands' and not t.completed then advance(t) end
             end
         end
 
-        if context.joker_main and G.GAME and G.GAME.last_hand_played then
+        local played_hand = context.scoring_name or (G.GAME and G.GAME.last_hand_played)
+        if context.joker_main and played_hand then
             for _, t in ipairs(tasks) do
-                if t.type == 'poker_hand' and not t.completed then
-                    if hand_matches(G.GAME.last_hand_played, t.target_hand) then advance(t) end
-                    break
+                if t.type == 'poker_hand' and not t.completed and t.target_hand == played_hand then
+                    advance(t)
                 end
             end
         end
@@ -528,30 +539,30 @@ SMODS.Joker:take_ownership('todo_list', {
             end
             if n > 0 then
                 for _, t in ipairs(tasks) do
-                    if t.type == 'play_enhanced' and not t.completed then advance(t, n); break end
+                    if t.type == 'play_enhanced' and not t.completed then advance(t, n) end
                 end
             end
         end
 
-        if context.pre_discard then
+        -- The Hook's random discard is not the player's discard: only its cards count, for the card tasks below.
+        if context.pre_discard and not context.hook then
             for _, t in ipairs(tasks) do
-                if t.type == 'discards' and not t.completed then advance(t); break end
+                if t.type == 'discards' and not t.completed then advance(t) end
             end
         end
 
         if context.discard and context.other_card then
             local oc = context.other_card
+            local is_face = oc.is_face and oc:is_face(true)
+            local id = oc.get_id and oc:get_id() or 0
             for _, t in ipairs(tasks) do
                 if not t.completed then
-                    if t.type == 'discard_face' and oc.is_face and oc:is_face(true) then
-                        advance(t); break
+                    if t.type == 'discard_face' then
+                        if is_face then advance(t) end
                     elseif t.type == 'discard_number' then
-                        local id = oc.get_id and oc:get_id() or 0
-                        if not (oc.is_face and oc:is_face(true)) and id >= 2 and id <= 10 then
-                            advance(t); break
-                        end
-                    elseif t.type == 'discard_suit' and t.suit and oc.is_suit and oc:is_suit(t.suit) then
-                        advance(t); break
+                        if not is_face and id >= 2 and id <= 10 then advance(t) end
+                    elseif t.type == 'discard_suit' then
+                        if t.suit and oc.is_suit and oc:is_suit(t.suit) then advance(t) end
                     end
                 end
             end
@@ -559,19 +570,19 @@ SMODS.Joker:take_ownership('todo_list', {
 
         if context.other_joker and context.other_joker ~= card then
             for _, t in ipairs(tasks) do
-                if t.type == 'jokers' and not t.completed then advance(t); break end
+                if t.type == 'jokers' and not t.completed then advance(t) end
             end
         end
 
         if context.using_consumeable then
             for _, t in ipairs(tasks) do
-                if t.type == 'consumables' and not t.completed then advance(t); break end
+                if t.type == 'consumables' and not t.completed then advance(t) end
             end
         end
 
         if context.skip_blind then
             for _, t in ipairs(tasks) do
-                if t.type == 'skip_blind' and not t.completed then advance(t); break end
+                if t.type == 'skip_blind' and not t.completed then advance(t) end
             end
         end
 

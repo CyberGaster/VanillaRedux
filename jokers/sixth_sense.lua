@@ -52,7 +52,7 @@ SMODS.Joker:take_ownership('sixth_sense', {
         name = 'Sixth Sense',
         text = {
             'For each {C:attention}6{} in your scoring hand,',
-            '{C:green}#1# in 6{} chance to create',
+            '{C:green}#1# in #2#{} chance to create',
             'a random {C:spectral}Spectral{} card',
             '{C:inactive}(Must have room)',
             '{C:inactive}(one card per round){}'
@@ -60,7 +60,8 @@ SMODS.Joker:take_ownership('sixth_sense', {
     },
     blueprint_compat = true,
     loc_vars = function(self, info_queue, card)
-        return { vars = { ''..(G.GAME and G.GAME.probabilities.normal or 1) } }
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, 6, 'vr_sixth_sense')
+        return { vars = { numerator, denominator } }
     end,
     calculate = function(self, card, context)
         if context.destroying_card then
@@ -69,41 +70,46 @@ SMODS.Joker:take_ownership('sixth_sense', {
         if context.individual and context.cardarea == G.play and context.other_card and not context.other_card.debuff then
             if context.other_card:get_id() ~= 6 then return {} end
             if not (G.consumeables and G.consumeables.cards and G.consumeables.config) then return {} end
-            if #G.consumeables.cards >= (G.consumeables.config.card_limit or 0) then return {} end
-
             local source = (context.blueprint and context.blueprint_card) or card
             local state = get_sixth_state(source)
             if not state or state.created then return {} end
 
             local hand_mark = tostring(G.GAME.round or 0)..'_'..tostring((G.GAME.current_round and G.GAME.current_round.hands_played) or 0)
             local seed = 'sixth_sense_ind_'..hand_mark..'_'..tostring(context.other_card.unique_val or 0)..'_'..tostring(source.unique_val or 'src')
-            local threshold = (G.GAME.probabilities.normal or 1) / 6
-            if pseudorandom(pseudoseed(seed)) < threshold then
-                state.created = true
-                local extra_delay = 0.75
-                return {
-                    extra = {
+            if not SMODS.pseudorandom_probability(source, seed, 1, 6, 'vr_sixth_sense') then return {} end
+
+            -- Room is checked when this effect is applied, in Joker order from left to right, counting slots
+            -- already reserved by Jokers before it. With or without room it is used up for this round.
+            return {
+                func = function()
+                    state.created = true
+                    local reserved = G.GAME.consumeable_buffer or 0
+                    if #G.consumeables.cards + reserved >= (G.consumeables.config.card_limit or 0) then
+                        card_eval_status_text(source, 'extra', nil, nil, nil, {
+                            message = localize('k_no_room_ex'),
+                            colour = G.C.RED
+                        })
+                        return true
+                    end
+                    G.GAME.consumeable_buffer = reserved + 1
+                    card_eval_status_text(source, 'extra', nil, nil, nil, {
                         message = localize('k_plus_spectral'),
-                        colour = G.C.SECONDARY_SET.Spectral,
-                        delay = extra_delay,
+                        colour = G.C.SECONDARY_SET.Spectral
+                    })
+                    G.E_MANAGER:add_event(Event({
+                        trigger = 'after',
+                        delay = 0.4,
                         func = function()
-                            G.E_MANAGER:add_event(Event({
-                                trigger = 'before',
-                                delay = extra_delay * 1.25,
-                                func = function()
-                                    if #G.consumeables.cards >= (G.consumeables.config.card_limit or 0) then return true end
-                                    create_spectral_safe('six')
-                                    play_sound('tarot1')
-                                    return true
-                                end
-                            }))
+                            create_spectral_safe('six')
+                            G.GAME.consumeable_buffer = math.max(0, (G.GAME.consumeable_buffer or 0) - 1)
+                            play_sound('tarot1')
                             return true
                         end
-                    },
-                    card = source
-                }
-            end
-            return {}
+                    }))
+                    return true
+                end,
+                card = source
+            }
         end
     end,
 })

@@ -3,7 +3,7 @@ local function get_total_mult()
     if rawget(_G, 'G') and G.GAME and G.GAME.hands and G.GAME.hands['Three of a Kind'] then
         level = G.GAME.hands['Three of a Kind'].level or 1
     end
-    return 12 + 3 * math.max(0, level - 1)
+    return 12 + 3 * math.max(0, VanillaRedux.to_number(level, 1) - 1)
 end
 
 SMODS.Joker:take_ownership('zany', {
@@ -12,7 +12,7 @@ SMODS.Joker:take_ownership('zany', {
         text = {
             '{C:mult}+12{} Mult if played hand',
             'contains a {C:attention}Three of a Kind{}',
-            '{C:mult}+3{} mult for each level',
+            '{C:mult}+3{} mult for each additional level',
             'of the {C:attention}Three of a Kind{} poker hand',
             '{C:inactive}(Currently {C:mult}+#1#{} {C:inactive}Mult)'
         }

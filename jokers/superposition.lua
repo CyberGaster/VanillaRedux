@@ -9,9 +9,10 @@ SMODS.Joker:take_ownership('superposition', {
     },
     config = { extra = { chips = 50, mult = 50, odds = 2 } },
     loc_vars = function(self, info_queue, card)
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra.odds, 'vr_superposition')
         return { vars = {
-            '' .. (G.GAME and G.GAME.probabilities.normal or 1),
-            card.ability.extra.odds,
+            numerator,
+            denominator,
             card.ability.extra.chips,
             card.ability.extra.mult
         } }
@@ -28,7 +29,7 @@ SMODS.Joker:take_ownership('superposition', {
                 end
             end
             if has_ace then
-                if pseudorandom('superposition') < (G.GAME.probabilities.normal / card.ability.extra.odds) then
+                if SMODS.pseudorandom_probability(card, 'superposition', 1, card.ability.extra.odds, 'vr_superposition') then
                     if pseudorandom('superposition_choice') < 0.5 then
                         return { chips = card.ability.extra.chips }
                     else

@@ -1,13 +1,7 @@
 local SCHOLAR_GAIN = 4
 
 local function to_number_level(raw)
-    if type(raw) == 'number' then return raw end
-    if type(raw) == 'table' then
-        if type(raw.level) == 'number' then return raw.level end
-        if type(raw[1]) == 'number' then return raw[1] end
-        if type(raw.sign) == 'number' then return raw.sign end
-    end
-    return 1
+    return VanillaRedux.to_number(raw, 1)
 end
 
 local function choose_hand_by_levels(card, seed_str)

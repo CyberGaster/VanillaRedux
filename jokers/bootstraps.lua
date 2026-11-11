@@ -36,6 +36,7 @@ SMODS.Joker:take_ownership('bootstraps', {
 
 local function _boot_to_number(x)
     if type(x) == 'number' then return x end
+    if type(x) == 'cdata' then return VanillaRedux.to_number(x, 0) end
     if type(x) == 'string' then return tonumber(x) or 0 end
     if type(x) == 'table' then
         local ok, v
@@ -53,19 +54,16 @@ if not rawget(_G, 'VP_BOOTSTRAPS_EASE_PATCHED') and ease_dollars then
     function ease_dollars(mod, instant)
         local mod_num = _boot_to_number(mod)
         if mod_num > 0 and G and G.jokers and G.jokers.cards then
-            local selling_lock = G.CONTROLLER and G.CONTROLLER.locks and G.CONTROLLER.locks.selling_card
-            if not selling_lock then
-                for i = 1, #G.jokers.cards do
-                    local jk = G.jokers.cards[i]
-                    if jk and jk.ability and jk.ability.name == 'Bootstraps' and not jk.debuff then
-                        local chunk = (jk.ability and jk.ability._vp_boot_chunk) or 2
-                        local carry = (jk.ability and jk.ability._vp_boot_carry) or 0
-                        local total = carry + mod_num
-                        local gained = math.floor(total / chunk)
-                        jk.ability._vp_boot_carry = total - gained * chunk
-                        if gained > 0 then
-                            jk.ability._vp_boot_mult = (jk.ability._vp_boot_mult or 0) + gained
-                        end
+            for i = 1, #G.jokers.cards do
+                local jk = G.jokers.cards[i]
+                if jk and jk.ability and jk.ability.name == 'Bootstraps' and not jk.debuff then
+                    local chunk = (jk.ability and jk.ability._vp_boot_chunk) or 2
+                    local carry = (jk.ability and jk.ability._vp_boot_carry) or 0
+                    local total = carry + mod_num
+                    local gained = math.floor(total / chunk)
+                    jk.ability._vp_boot_carry = total - gained * chunk
+                    if gained > 0 then
+                        jk.ability._vp_boot_mult = (jk.ability._vp_boot_mult or 0) + gained
                     end
                 end
             end

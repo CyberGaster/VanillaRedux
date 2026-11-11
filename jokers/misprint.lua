@@ -26,9 +26,9 @@ SMODS.Joker:take_ownership('misprint', {
 
 if not rawget(_G, 'VP_MISPRINT_PATCHED') then
 local old_generate = Card.generate_UIBox_ability_table
-function Card:generate_UIBox_ability_table()
-    local t = old_generate(self)
-    if self and self.ability and self.ability.set == 'Joker' and self.ability.name == 'Misprint'
+function Card:generate_UIBox_ability_table(vars_only)
+    local t = old_generate(self, vars_only)
+    if not vars_only and self and self.ability and self.ability.set == 'Joker' and self.ability.name == 'Misprint'
        and not self.debuff and t and type(t) == 'table' and t.main then
         local extra = self.ability.extra or {}
         local x_min = extra.x_min or 0.5

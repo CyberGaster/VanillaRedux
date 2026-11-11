@@ -1,10 +1,7 @@
 local function is_face_card(c)
     if not c then return false end
-    if find_joker and G.jokers then
-        local pareidolia = find_joker("Pareidolia")
-        if pareidolia and next(pareidolia) then return true end
-    end
-    if c.is_face then return c:is_face(true) end
+    if SMODS.has_no_rank and SMODS.has_no_rank(c) then return false end
+    if c.is_face then return c:is_face(true) and true or false end
     if c.get_id then
         local id = c:get_id()
         return id == 11 or id == 12 or id == 13
@@ -70,7 +67,6 @@ SMODS.Consumable:take_ownership('c_familiar', {
                 func = function()
                     local cards = {}
                     for i = 1, (card.ability.extra or 3) do
-                        cards[i] = true
                         local _rank = pseudorandom_element({'J', 'Q', 'K'}, pseudoseed('familiar_create'))
                         local _suit = pseudorandom_element({'S','H','D','C'}, pseudoseed('familiar_create'))
 
@@ -81,10 +77,11 @@ SMODS.Consumable:take_ownership('c_familiar', {
                             end
                         end
 
-                        create_playing_card({
+                        local new_card = create_playing_card({
                             front = G.P_CARDS[_suit..'_'.._rank],
                             center = pseudorandom_element(cen_pool, pseudoseed('familiar_create'))
                         }, G.hand, nil, i ~= 1, {G.C.SECONDARY_SET.Spectral})
+                        if new_card then cards[#cards + 1] = new_card end
                     end
                     playing_card_joker_effects(cards)
                     return true

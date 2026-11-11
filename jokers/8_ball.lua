@@ -1,4 +1,3 @@
-
 local function counter_for(card, context)
     local owner = context.blueprint and context.blueprint_card
     if owner and owner ~= card and owner.ability then
@@ -37,15 +36,17 @@ SMODS.Joker:take_ownership('8_ball', {
                     counter.total_triggers = counter.total_triggers + 1
                     counter.eights_count = 0
 
-                    local free_slots = G.consumeables.config.card_limit - #G.consumeables.cards
-                    local to_create = math.min(2, free_slots)
-
                     return {
                         message = '8/8',
                         colour = G.C.CHIPS,
                         delay = 0.4,
                         func = function()
+                            local reserved = G.GAME.consumeable_buffer or 0
+                            local free_slots = G.consumeables.config.card_limit - #G.consumeables.cards - reserved
+                            local to_create = math.max(0, math.min(2, free_slots))
+
                             if to_create > 0 then
+                                G.GAME.consumeable_buffer = reserved + to_create
                                 card_eval_status_text(owner, 'extra', nil, nil, nil, {
                                     message = '+' .. to_create .. ' Tarot',
                                     colour = G.C.PURPLE
@@ -55,10 +56,12 @@ SMODS.Joker:take_ownership('8_ball', {
                                     delay = 0.4,
                                     func = function()
                                         for i = 1, to_create do
+                                            if #G.consumeables.cards >= G.consumeables.config.card_limit then break end
                                             local tarot = create_card('Tarot', G.consumeables, nil, nil, nil, nil, nil, '8ba')
                                             tarot:add_to_deck()
                                             G.consumeables:emplace(tarot)
                                         end
+                                        G.GAME.consumeable_buffer = math.max(0, (G.GAME.consumeable_buffer or 0) - to_create)
                                         play_sound('tarot1')
                                         return true
                                     end

@@ -11,6 +11,7 @@ SMODS.Joker:take_ownership('burnt', {
 
 local function to_num(v)
     if type(v) == 'number' then return v end
+    if type(v) == 'cdata' then return VanillaRedux.to_number(v, 0) end
     if type(v) == 'string' then local n = tonumber(v); if n then return n end end
     if type(v) == 'table' then
         if type(v.toNumber) == 'function' then local ok, res = pcall(v.toNumber, v); if ok and type(res) == 'number' then return res end end

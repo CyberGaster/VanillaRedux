@@ -15,46 +15,44 @@ SMODS.Joker:take_ownership('ancient', {
     end,
 })
 
-if not rawget(_G, 'VP_ANCIENT_EVALUATE_PATCHED') and rawget(_G, 'evaluate_poker_hand') then
-    local old_evaluate_poker_hand = evaluate_poker_hand
-    function evaluate_poker_hand(hand)
-        local results = old_evaluate_poker_hand(hand)
+local function ancient_is_active()
+    if not (G and G.jokers and G.jokers.cards) then return false end
+    for i = 1, #G.jokers.cards do
+        local j = G.jokers.cards[i]
+        if j and j.ability and j.ability.name == 'Ancient Joker' and not j.debuff then
+            return true
+        end
+    end
+    return false
+end
 
-        local has_ancient = false
-        if G.jokers and G.jokers.cards then
-            for i = 1, #G.jokers.cards do
-                local j = G.jokers.cards[i]
-                if j and j.ability and j.ability.name == 'Ancient Joker' and not j.debuff then
-                    has_ancient = true; break
-                end
-            end
+-- Stone cards are added as one more rank group where the game builds its rank groups, so
+-- Two Pair, Full House and every other hand built on them see the Stones like any other rank.
+if not rawget(_G, 'VP_ANCIENT_GROUPS_PATCHED') and rawget(_G, 'get_X_same') then
+    local old_get_X_same = get_X_same
+    function get_X_same(num, hand, or_more)
+        if num < 2 or not ancient_is_active() then
+            return old_get_X_same(num, hand, or_more)
         end
 
-        if not has_ancient then return results end
-
-        local stones = {}
+        local stones, others = {}, {}
         for i = 1, #hand do
             local c = hand[i]
             if c and c.ability and c.ability.effect == 'Stone Card' then
                 stones[#stones + 1] = c
+            else
+                others[#others + 1] = c
             end
         end
-
-        local function ensure_x_of_a_kind(key, needed)
-            if results[key] and next(results[key]) then return end
-            if #stones >= needed then
-                local group = {}
-                for i = 1, needed do group[i] = stones[i] end
-                results[key] = {group}
-            end
+        if #stones < 2 then
+            return old_get_X_same(num, hand, or_more)
         end
 
-        ensure_x_of_a_kind('Five of a Kind', 5)
-        ensure_x_of_a_kind('Four of a Kind', 4)
-        ensure_x_of_a_kind('Three of a Kind', 3)
-        ensure_x_of_a_kind('Pair', 2)
-
-        return results
+        local groups = old_get_X_same(num, others, or_more)
+        if (or_more and #stones >= num) or #stones == num then
+            groups[#groups + 1] = stones
+        end
+        return groups
     end
-    _G.VP_ANCIENT_EVALUATE_PATCHED = true
+    _G.VP_ANCIENT_GROUPS_PATCHED = true
 end

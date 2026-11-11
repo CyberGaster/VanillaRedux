@@ -7,7 +7,7 @@
     "prefix": "vanillaredux",
     "main_file": "VanillaRedux.lua",
     "badge_colour": "4EB58F",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "dependencies": [
         "Steamodded (>=26.1002.0)",
         "Lovely (>=0.10.0~)"

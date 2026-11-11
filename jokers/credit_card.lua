@@ -94,6 +94,7 @@ SMODS.Joker:take_ownership('credit_card', {
         if not rawget(_G,'VP_CREDIT_CARD_PATCHED') then
             local function _cc_to_number(x)
                 if type(x) == 'number' then return x end
+                if type(x) == 'cdata' then return VanillaRedux.to_number(x, 0) end
                 if type(x) == 'string' then return tonumber(x) or 0 end
                 if type(x) == 'table' then
                     local ok, v
@@ -207,6 +208,18 @@ SMODS.Joker:take_ownership('credit_card', {
                         end
                     end
                     
+                    local ready_cc = find_cc(true)
+                    local cc_ready = ready_cc and (ready_cc.ability._vp_cc_shop_state or 'ready') == 'ready'
+                    if card_to_buy and card_to_buy.ability and card_to_buy.ability._vp_cc_display_free
+                       and not card_to_buy.ability.couponed and not cc_ready then
+                        -- No ready Credit Card is left to pay for this item, so it costs its real price again.
+                        card_to_buy.ability._vp_cc_display_free = nil
+                        card_to_buy:set_cost()
+                        if _cc_to_number(card_to_buy.cost) > _cc_to_number(G.GAME.dollars) - _cc_to_number(G.GAME.bankrupt_at) then
+                            e.disable_button = nil
+                            return false
+                        end
+                    end
                     orig_buy_from_shop(e)
                 end
             end
@@ -250,16 +263,6 @@ SMODS.Joker:take_ownership('credit_card', {
                 local old_calculate_joker = Card.calculate_joker
                 function Card:calculate_joker(context)
                     if self.ability and self.ability.name == 'Credit Card' and not self.debuff then
-                        if context and context.selling_self then
-                            G.E_MANAGER:add_event(Event({
-                                trigger = 'after',
-                                delay = 0.05,
-                                func = function()
-                                    force_update_shop_prices(true)
-                                    return true
-                                end
-                            }))
-                        end
                         
                         if context and context.card_added and G.STATE == G.STATES.SHOP then
                             G.E_MANAGER:add_event(Event({
@@ -518,6 +521,40 @@ SMODS.Joker:take_ownership('credit_card', {
 
 apply_credit_card_patches()
 
+-- G.shop is cleared when the shop closes, unlike G.STATE, which is SMODS_BOOSTER_OPENED
+-- (not SHOP) while a pack bought in the shop is open.
+local function refresh_shop_prices_after_add()
+    if not G.shop then return end
+    G.E_MANAGER:add_event(Event({
+        trigger = 'after',
+        delay = 0.2,
+        func = function()
+            if G.shop and rawget(_G, 'force_update_shop_prices') then
+                force_update_shop_prices()
+            end
+            return true
+        end
+    }))
+end
+
+-- Prices set to $0 while a Credit Card was ready must be undone however it leaves (sold, destroyed
+-- by Ankh/Hex, debuffed). Reverting first and reapplying lets another ready Credit Card keep its
+-- free purchase.
+local function refresh_shop_prices_after_remove()
+    if not G.shop then return end
+    G.E_MANAGER:add_event(Event({
+        trigger = 'after',
+        delay = 0.2,
+        func = function()
+            if G.shop and rawget(_G, 'force_update_shop_prices') then
+                force_update_shop_prices(true)
+                force_update_shop_prices()
+            end
+            return true
+        end
+    }))
+end
+
 local function other_added_credit_cards(card)
     local count = 0
     for _, j in ipairs((G.jokers and G.jokers.cards) or {}) do
@@ -536,6 +573,7 @@ if not rawget(_G, 'VR_CREDIT_CARD_DEBT_PATCHED') and rawget(_G, 'Card') then
         local applies = self.ability and self.ability.name == 'Credit Card' and not self.added_to_deck
         local others = applies and other_added_credit_cards(self) or 0
         local ret = orig_add_to_deck(self, from_debuff)
+        if applies then refresh_shop_prices_after_add() end
         if applies and others > 0 and G.GAME then
             G.GAME.bankrupt_at = G.GAME.bankrupt_at + (self.ability.extra or 20)
         end
@@ -547,6 +585,7 @@ if not rawget(_G, 'VR_CREDIT_CARD_DEBT_PATCHED') and rawget(_G, 'Card') then
         local applies = self.ability and self.ability.name == 'Credit Card' and self.added_to_deck
         local others = applies and other_added_credit_cards(self) or 0
         local ret = orig_remove_from_deck(self, from_debuff)
+        if applies then refresh_shop_prices_after_remove() end
         if applies and others > 0 and G.GAME then
             G.GAME.bankrupt_at = G.GAME.bankrupt_at - (self.ability.extra or 20)
         end

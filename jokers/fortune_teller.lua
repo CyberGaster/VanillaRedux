@@ -12,7 +12,7 @@ if not rawget(_G, 'VR_FT_SHOP_PATCHED') and rawget(_G, 'create_card_for_shop') t
             end
         end
         if ft_count > 0 and prev and prev > 0 then
-            G.GAME.tarot_rate = prev + (prev * 0.2 * ft_count)
+            G.GAME.tarot_rate = prev + (prev * 0.1 * ft_count)
         end
         local result = old_create_card_for_shop(area)
         if ft_count > 0 then G.GAME.tarot_rate = prev end
@@ -27,7 +27,8 @@ SMODS.Joker:take_ownership('fortune_teller', {
         text = {
             'This Joker gains {X:mult,C:white}X#1#{} Mult',
             'per {C:tarot}Tarot{} card used this run',
-            'Increases chance of {C:tarot}Tarot{} in shop',
+            'Slightly increases chance',
+            'of {C:tarot}Tarot{} in shop',
             '{C:inactive}(Currently {X:mult,C:white}X#2#{C:inactive} Mult)',
         }
     },

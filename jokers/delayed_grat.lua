@@ -1,5 +1,6 @@
 local function _dg_to_number(x)
     if type(x) == 'number' then return x end
+    if type(x) == 'cdata' then return VanillaRedux.to_number(x, 0) end
     if type(x) == 'string' then return tonumber(x) or 0 end
     if type(x) == 'table' then
         local ok, v
@@ -147,7 +148,7 @@ SMODS.Joker:take_ownership('delayed_grat', {
                 if extra._boss_defeated_this_round and (extra.stored_value or 0) > 0 then
                     local bonus_mult = extra.boss_bonus or 0.5
                     local current_value = extra.stored_value or 0
-                    local bonus = math.ceil(current_value * bonus_mult + 0.001)
+                    local bonus = math.ceil(current_value * bonus_mult)
                     if bonus > 0 then
                         extra.stored_value = math.ceil(current_value + bonus)
                         update_sell_cost(card)

@@ -1,4 +1,14 @@
 
+local function is_legendary_class(rarity)
+    if rarity == nil or rarity == 4 or rarity == 'Legendary' then return true end
+    if type(rarity) == 'number' then return false end
+    local info = SMODS.Rarities and SMODS.Rarities[rarity]
+    if not info then return false end
+    local pool = info.pools and info.pools.Joker
+    local weight = (type(pool) == 'table' and pool.weight) or info.default_weight or 0
+    return weight == 0
+end
+
 local function choose_target(card)
     if not (G and G.jokers and G.jokers.cards) then return nil end
     local pool = {}
@@ -6,17 +16,32 @@ local function choose_target(card)
         local j = G.jokers.cards[i]
         if j ~= card and not j.getting_sliced and not j.removed
            and j.config and j.config.center
-           and type(j.config.center.rarity) == 'number' and j.config.center.rarity < 4
-           and (j.config.center.blueprint_compat ~= false) then
+           and not is_legendary_class(j.config.center.rarity)
+           and j.config.center.blueprint_compat then
             table.insert(pool, j)
         end
     end
     return #pool > 0 and pseudorandom_element(pool, pseudoseed('abstract')) or nil
 end
 
+-- Talisman and Amulet keep big numbers as objects: cdata in Amulet (reported as 'table' when its
+-- compatibility mode is on), tables with OmegaMeta/BigMeta in older Talisman. The save file stores
+-- them like plain numbers, so the snapshot keeps them instead of dropping them with other objects.
+local function is_big_number(value)
+    local big = rawget(_G, 'Big')
+    local is = type(big) == 'table' and rawget(big, 'is')
+    if type(is) == 'function' then
+        local ok, res = pcall(is, value)
+        if ok and res then return true end
+    end
+    local mt = getmetatable(value)
+    return mt ~= nil and (mt == rawget(_G, 'OmegaMeta') or mt == rawget(_G, 'BigMeta'))
+end
+
 local function snapshot_value(value, depth, seen)
     local kind = type(value)
     if kind == 'number' or kind == 'string' or kind == 'boolean' then return value end
+    if (kind == 'table' or kind == 'cdata') and is_big_number(value) then return value end
     if kind ~= 'table' or depth > 8 or seen[value] or getmetatable(value) then return nil end
     seen[value] = true
     local out = {}
@@ -104,6 +129,95 @@ local function check_effect(res)
            (res.repetitions and res.repetitions > 0) or res.swap or res.balance or res.func
 end
 
+local function joker_display_name(center)
+    if not center then return 'none' end
+    local key = center.key
+
+    local function usable(value)
+        if type(value) == 'table' then value = table.concat(value, ' ') end
+        if type(value) ~= 'string' then return nil end
+        value = value:gsub('{[^}]*}', ''):gsub('^%s+', ''):gsub('%s+$', '')
+        if value == '' or value == 'ERROR' then return nil end
+        return value
+    end
+
+    local ok, localized = pcall(localize, { type = 'name_text', set = center.set or 'Joker', key = key })
+    local name = ok and usable(localized)
+    if name then return name end
+
+    name = center.loc_txt and usable(center.loc_txt.name)
+    if name then return name end
+
+    name = center.name ~= key and usable(center.name)
+    if name then return name end
+
+    return (tostring(key):gsub('^j_', ''):gsub('_', ' '))
+end
+
+-- Same contract as SMODS.blueprint_effect (the outer copier stays the owner of the effect, the
+-- copier stack is kept), but a non-table result such as `true` is passed through and the context
+-- is restored even when the copied Joker errors.
+local function copy_effect(card, target, context)
+    local center = target and target.config and target.config.center
+    if not center or not center.blueprint_compat
+       or target == card or target.debuff or context.no_blueprint then
+        return nil
+    end
+    if (context.blueprint or 0) > #G.jokers.cards then return nil end
+
+    local prev_count, prev_owner = context.blueprint, context.blueprint_card
+    local stack = context.blueprint_copiers_stack or {}
+    context.blueprint = (prev_count or 0) + 1
+    context.blueprint_card = prev_owner or card
+    context.blueprint_copiers_stack = stack
+    stack[#stack + 1] = card
+    context.blueprint_copier = card
+    local owner = context.blueprint_card
+
+    local ok, res = xpcall(function() return target:calculate_joker(context) end, function(err)
+        return debug and debug.traceback and debug.traceback(tostring(err), 2) or err
+    end)
+
+    context.blueprint = prev_count
+    context.blueprint_card = prev_owner
+    stack[#stack] = nil
+    context.blueprint_copier = stack[#stack]
+    if not ok then error(res, 0) end
+
+    if type(res) == 'table' then res.card = owner end
+    return res
+end
+
+local function forward_effect(card, context)
+    local target = card.ability._abstract_round_chosen and resolve_target(card)
+    if not (target and target ~= card and target.ability) then return nil end
+
+    local res = copy_effect(card, target, context)
+    if res == true then return true end
+    if check_effect(res) then
+        res.colour = G.C.GREY
+        return res
+    end
+    return nil
+end
+
+-- The reset waits until every Joker has been calculated for this context, so Blueprint and
+-- Brainstorm copies of Abstract placed after it still get the target's end of round effect.
+local function schedule_reset(card, silent)
+    G.E_MANAGER:add_event(Event({
+        trigger = 'immediate',
+        func = function()
+            if not card.removed and card.ability and card.ability._abstract_round_chosen then
+                clear_target(card)
+                if not silent then
+                    card_eval_status_text(card, 'extra', nil, nil, nil, {message = localize('k_reset')})
+                end
+            end
+            return true
+        end
+    }))
+end
+
 local function do_abstract_logic(card, context)
     if card.debuff then return nil end  
 
@@ -117,7 +231,7 @@ local function do_abstract_logic(card, context)
                 card.ability._abstract_key = tgt.config.center.key
                 card.ability._abstract_sort_id = tgt.sort_id
                 refresh_snapshot(card)
-                local ln = localize({type = 'name', key = tgt.config.center.key, set = 'Joker'})
+                local ln = joker_display_name(tgt.config.center)
                 name = (type(ln) == 'string') and ln or tgt.config.center.name
             end
             card.ability._abstract_name = name
@@ -126,42 +240,18 @@ local function do_abstract_logic(card, context)
                 card_eval_status_text(card, 'extra', nil, nil, nil, {message = tostring(name), colour = G.C.FILTER})
             end
         end
-        return nil
+        return forward_effect(card, context)
     end
 
     if context.end_of_round and not context.individual and not context.repetition then
-        clear_target(card)
-        if not context.game_over then
-            card_eval_status_text(card, 'extra', nil, nil, nil, {message = localize('k_reset')})
+        local res = forward_effect(card, context)
+        if not context.blueprint then
+            schedule_reset(card, context.game_over)
         end
-        return nil
+        return res
     end
 
-    local tgt = card.ability._abstract_round_chosen and resolve_target(card)
-    if tgt and tgt ~= card and tgt.ability then
-        local prev_count = context.blueprint
-        local prev_blueprint_card = context.blueprint_card
-        context.blueprint = (context.blueprint or 0) + 1
-        context.blueprint_card = card
-        if context.blueprint > (#G.jokers.cards + 1) then
-            context.blueprint = prev_count
-            context.blueprint_card = prev_blueprint_card
-            return nil
-        end
-        local res = tgt:calculate_joker(context)
-        context.blueprint = prev_count
-        context.blueprint_card = prev_blueprint_card
-
-        if res then
-            if res == true then return true end
-            if check_effect(res) then
-                res.card = card
-                res.colour = G.C.GREY
-                return res
-            end
-        end
-    end
-    return nil
+    return forward_effect(card, context)
 end
 
 SMODS.Joker:take_ownership('abstract', {
@@ -170,7 +260,7 @@ SMODS.Joker:take_ownership('abstract', {
     loc_txt = {
         name = 'Abstract Joker',
         text = {
-            'At beginning of each round,',
+            'When {C:attention}Blind{} is selected,',
             'randomly copies the effect of',
             'any other {C:attention}non-legendary{} Joker',
             '{C:inactive}Resets effect at end of round{}',
@@ -179,7 +269,10 @@ SMODS.Joker:take_ownership('abstract', {
     },
     config = { extra = 0 },
     loc_vars = function(self, info_queue, card)
-        return { vars = { tostring((card and card.ability and card.ability._abstract_name) or 'none') } }
+        local ability = card and card.ability
+        local center = ability and ability._abstract_key and G.P_CENTERS[ability._abstract_key]
+        local name = (center and joker_display_name(center)) or (ability and ability._abstract_name) or 'none'
+        return { vars = { tostring(name) } }
     end,
     set_ability = function(self, card, initial, delay_sprites)
         card.ability._abstract_name = card.ability._abstract_name or 'none'

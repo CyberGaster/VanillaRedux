@@ -3,7 +3,7 @@ local function get_total_chips()
     if rawget(_G, 'G') and G.GAME and G.GAME.hands and G.GAME.hands['Pair'] then
         level = G.GAME.hands['Pair'].level or 1
     end
-    return 50 + 5 * math.max(0, level - 1)
+    return 50 + 5 * math.max(0, VanillaRedux.to_number(level, 1) - 1)
 end
 
 SMODS.Joker:take_ownership('sly', {
@@ -12,7 +12,7 @@ SMODS.Joker:take_ownership('sly', {
         text = {
             '{C:chips}+50{} Chips if played',
             'hand contains a {C:attention}Pair{}',
-            '{C:chips}+5{} chips for each level',
+            '{C:chips}+5{} chips for each additional level',
             'of the {C:attention}Pair{} poker hand',
             '{C:inactive}(Currently {C:chips}+#1#{} {C:inactive}Chips)'
         }

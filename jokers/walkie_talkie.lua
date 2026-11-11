@@ -77,9 +77,13 @@ if not rawget(_G, 'VP_WALKIE_TALKIE_SIMPLE_PATCHED') and rawget(_G, 'Card') and 
             end
         end
 
+        -- A copier (Blueprint, Brainstorm, Abstract) calls this function again for its target, so a copied
+        -- retrigger is seen twice. Only the outermost call, which has no blueprint flag on entry, is counted.
+        local outermost = not (context and context.blueprint)
+
         local result = old_calculate_joker(self, context)
 
-        if result and result.repetitions and context and context.repetition and context.cardarea == G.play
+        if outermost and result and result.repetitions and context and context.repetition and context.cardarea == G.play
            and context.other_card and self.ability and self.ability.name ~= 'Walkie Talkie' then
 
             local has_walkie_talkie = false

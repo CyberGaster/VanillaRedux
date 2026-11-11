@@ -1,3 +1,9 @@
+local function pack_is_open()
+    local state, states = G.STATE, G.STATES
+    return state == states.TAROT_PACK or state == states.SPECTRAL_PACK
+        or (states.SMODS_BOOSTER_OPENED ~= nil and state == states.SMODS_BOOSTER_OPENED)
+end
+
 SMODS.Consumable:take_ownership('c_wheel_of_fortune', {
     loc_txt = {
         name = 'The Wheel of Fortune',
@@ -8,7 +14,8 @@ SMODS.Consumable:take_ownership('c_wheel_of_fortune', {
         }
     },
     loc_vars = function(self, info_queue, card)
-        return { vars = { G.GAME.probabilities.normal, card.ability.extra } }
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra or 4, 'vr_wheel_of_fortune')
+        return { vars = { numerator, denominator } }
     end,
     use = function(self, card, area, copier)
         local eligible = {}
@@ -18,7 +25,7 @@ SMODS.Consumable:take_ownership('c_wheel_of_fortune', {
             end
         end
 
-        local roll = pseudorandom('wheel_of_fortune') < (G.GAME.probabilities.normal / (card.ability.extra or 4))
+        local roll = SMODS.pseudorandom_probability(card, 'wheel_of_fortune', 1, card.ability.extra or 4, 'vr_wheel_of_fortune')
 
         if #eligible > 0 and roll then
             local target = pseudorandom_element(eligible, pseudoseed('wheel_of_fortune'))
@@ -55,8 +62,8 @@ SMODS.Consumable:take_ownership('c_wheel_of_fortune', {
                         hold = 1.4,
                         major = card,
                         backdrop_colour = G.C.SECONDARY_SET.Tarot,
-                        align = (G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK) and 'tm' or 'cm',
-                        offset = {x = 0, y = (G.STATE == G.STATES.TAROT_PACK or G.STATE == G.STATES.SPECTRAL_PACK) and -0.2 or 0},
+                        align = pack_is_open() and 'tm' or 'cm',
+                        offset = {x = 0, y = pack_is_open() and -0.2 or 0},
                         silent = true
                     })
                     G.E_MANAGER:add_event(Event({trigger = 'after', delay = 0.06*G.SETTINGS.GAMESPEED, blockable = false, blocking = false, func = function()

@@ -18,9 +18,14 @@ local function reduce_boss_requirement_linear()
     local blind = game.GAME.blind
     if not blind or not blind.boss then return end
 
-    local ante = (game.GAME.round_resets and game.GAME.round_resets.ante) or 1
-    local ante_scaling = (game.GAME.starting_params and game.GAME.starting_params.ante_scaling) or 1
-    local base = ((get_blind_amount and get_blind_amount(ante)) or (blind.chips or 0)) * (blind.mult or 1) * ante_scaling
+    -- Every Chicot recomputes from the requirement the Blind had before the first Chicot changed it,
+    -- so several Chicots stack once and changes made by other effects are kept.
+    local round = game.GAME.round or 0
+    if blind.vr_chicot_round ~= round or blind.vr_chicot_base == nil then
+        blind.vr_chicot_round = round
+        blind.vr_chicot_base = blind.chips
+    end
+    local base = blind.vr_chicot_base
 
     local chicot_count = 0
     if game.jokers and game.jokers.cards then
@@ -34,7 +39,8 @@ local function reduce_boss_requirement_linear()
     if chicot_count <= 0 then return end
 
     local reduction_factor = math.max(0.01, 1 - 0.15 * chicot_count)
-    local target = math.max(1, math.floor(base * reduction_factor))
+    local target = VanillaRedux.scale_chips(base, reduction_factor, 1)
+    if target == nil then return end
 
     if blind.chips ~= target then
         blind.chips = target

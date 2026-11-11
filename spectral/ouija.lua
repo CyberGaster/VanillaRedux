@@ -31,12 +31,11 @@ SMODS.Consumable:take_ownership('c_ouija', {
         end
         delay(0.2)
 
-        local _rank = pseudorandom_element({'2','3','4','5','6','7','8','9','T','J','Q','K','A'}, pseudoseed('ouija'))
+        local _rank = pseudorandom_element({'2','3','4','5','6','7','8','9','10','Jack','Queen','King','Ace'}, pseudoseed('ouija'))
         for i = 1, #G.hand.cards do
             G.E_MANAGER:add_event(Event({func = function()
                 local c = G.hand.cards[i]
-                local suit_prefix = string.sub(c.base.suit, 1, 1) .. '_'
-                c:set_base(G.P_CARDS[suit_prefix .. _rank])
+                if c then SMODS.change_base(c, nil, _rank) end
                 return true
             end}))
         end

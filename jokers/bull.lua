@@ -32,6 +32,7 @@ SMODS.Joker:take_ownership('bull', {
 
 local function _bull_to_number(x)
     if type(x) == 'number' then return x end
+    if type(x) == 'cdata' then return VanillaRedux.to_number(x, 0) end
     if type(x) == 'string' then return tonumber(x) or 0 end
     if type(x) == 'table' then
         local ok, v
@@ -49,13 +50,10 @@ if not rawget(_G, 'VP_BULL_EASE_PATCHED') and ease_dollars then
     function ease_dollars(mod, instant)
         local mod_num = _bull_to_number(mod)
         if mod_num > 0 and G and G.jokers and G.jokers.cards then
-            local selling_lock = G.CONTROLLER and G.CONTROLLER.locks and G.CONTROLLER.locks.selling_card
-            if not selling_lock then
-                for i = 1, #G.jokers.cards do
-                    local jk = G.jokers.cards[i]
-                    if jk and jk.ability and jk.ability.name == 'Bull' and not jk.debuff then
-                        jk.ability._vp_bull_chips = (jk.ability._vp_bull_chips or 0) + math.floor(mod_num) * 2
-                    end
+            for i = 1, #G.jokers.cards do
+                local jk = G.jokers.cards[i]
+                if jk and jk.ability and jk.ability.name == 'Bull' and not jk.debuff then
+                    jk.ability._vp_bull_chips = (jk.ability._vp_bull_chips or 0) + math.floor(mod_num) * 2
                 end
             end
         end

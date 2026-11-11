@@ -1,7 +1,11 @@
-local ice_cream_round_start_time = nil
-local ice_cream_pause_start_time = nil
-local ice_cream_total_paused_time = 0
-local ice_cream_last_time_penalty = 0
+-- Active time of the current round is kept in G.GAME, which is saved with the run, so restarting the
+-- game does not reset the countdown. Only the last real-time reading lives outside the save.
+local ice_cream_last_real = nil
+
+local function ice_cream_timer()
+    G.GAME.vr_ice_cream = G.GAME.vr_ice_cream or { elapsed = 0, applied = 0 }
+    return G.GAME.vr_ice_cream
+end
 
 local function destroy_ice_cream(card)
     G.E_MANAGER:add_event(Event({
@@ -24,35 +28,25 @@ local function destroy_ice_cream(card)
 end
 
 local function update_ice_cream_time_penalty()
-    if not G or not G.STATES or not G.TIMERS then return end
+    if not G or not G.STATES or not G.TIMERS or not G.GAME then return end
 
-    if G.STATE == G.STATES.SELECTING_HAND or G.STATE == G.STATES.DRAW_TO_HAND then
-        if not ice_cream_round_start_time then
-            ice_cream_round_start_time = G.TIMERS.REAL
-            ice_cream_total_paused_time = 0
-            ice_cream_last_time_penalty = 0
-            G.ICE_CREAM_LAST_PROCESSED_PENALTY = nil
-        end
-        if ice_cream_pause_start_time then
-            ice_cream_total_paused_time = ice_cream_total_paused_time + (G.TIMERS.REAL - ice_cream_pause_start_time)
-            ice_cream_pause_start_time = nil
-        end
-    else
-        if ice_cream_round_start_time and not ice_cream_pause_start_time then
-            ice_cream_pause_start_time = G.TIMERS.REAL
-        end
+    if G.STATE ~= G.STATES.SELECTING_HAND and G.STATE ~= G.STATES.DRAW_TO_HAND then
+        ice_cream_last_real = nil
         return
     end
 
-    local effective_time = (G.TIMERS.REAL - ice_cream_round_start_time) - ice_cream_total_paused_time
-    local time_penalties = math.floor(effective_time / 10)
+    local now = G.TIMERS.REAL
+    local timer = ice_cream_timer()
+    if ice_cream_last_real then
+        timer.elapsed = timer.elapsed + math.max(0, now - ice_cream_last_real)
+    end
+    ice_cream_last_real = now
 
-    if G.ICE_CREAM_LAST_PROCESSED_PENALTY == time_penalties then return end
-    if time_penalties <= ice_cream_last_time_penalty then return end
+    local time_penalties = math.floor(timer.elapsed / 10)
+    if time_penalties <= timer.applied then return end
 
-    local penalties_to_apply = (time_penalties - ice_cream_last_time_penalty) * 5
-    G.ICE_CREAM_LAST_PROCESSED_PENALTY = time_penalties
-    ice_cream_last_time_penalty = time_penalties
+    local penalties_to_apply = (time_penalties - timer.applied) * 5
+    timer.applied = time_penalties
 
     if not G.jokers or not G.jokers.cards then return end
 
@@ -78,11 +72,8 @@ if not rawget(_G, 'VP_ICE_CREAM_PATCHED') then
 local original_new_round = new_round
 function new_round()
     local result = original_new_round and original_new_round() or nil
-    ice_cream_round_start_time = nil
-    ice_cream_pause_start_time = nil
-    ice_cream_total_paused_time = 0
-    ice_cream_last_time_penalty = 0
-    G.ICE_CREAM_LAST_PROCESSED_PENALTY = nil
+    ice_cream_last_real = nil
+    if G.GAME then G.GAME.vr_ice_cream = { elapsed = 0, applied = 0 } end
     return result
 end
 

@@ -3,7 +3,7 @@ local function count_suit_in_deck()
     local count = 0
     for i = 1, #G.playing_cards do
         local c = G.playing_cards[i]
-        if c and c.is_suit and c:is_suit("Clubs") then
+        if c and c.is_suit and c:is_suit("Clubs", true) then
             count = count + 1
         end
     end

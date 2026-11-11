@@ -22,12 +22,27 @@ local function active_pareidolia_rank()
         for i = 1, #G.jokers.cards do
             local joker = G.jokers.cards[i]
             if joker.config and joker.config.center and joker.config.center.key == 'j_pareidolia'
-               and not joker.debuff and joker.ability and joker.ability.extra then
+               and joker.added_to_deck and not joker.debuff and joker.ability and joker.ability.extra then
                 return joker.ability.extra.face_rank
             end
         end
     end
     return nil
+end
+
+-- Pareidolia changes which cards are face cards, so debuffs that depend on it (Faceless Joker, The
+-- Plant) are recalculated as soon as it is gained or lost.
+local function refresh_playing_card_debuffs()
+    G.E_MANAGER:add_event(Event({
+        func = function()
+            if G.GAME and G.GAME.blind and G.playing_cards then
+                for _, v in ipairs(G.playing_cards) do
+                    G.GAME.blind:debuff_card(v)
+                end
+            end
+            return true
+        end
+    }))
 end
 
 if not rawget(_G, 'VP_PAREIDOLIA_PATCHED') then
@@ -66,6 +81,12 @@ SMODS.Joker:take_ownership('pareidolia', {
     cost = 8,
     rarity = 3,
     config = { extra = { face_rank = 'Jack' } },
+    add_to_deck = function(self, card, from_debuff)
+        refresh_playing_card_debuffs()
+    end,
+    remove_from_deck = function(self, card, from_debuff)
+        refresh_playing_card_debuffs()
+    end,
     loc_vars = function(self, info_queue, card)
         return { vars = { card.ability.extra.face_rank } }
     end,

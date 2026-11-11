@@ -4,7 +4,7 @@ SMODS.Joker:take_ownership('matador', {
     loc_txt = {
         name = 'Matador',
         text = {
-            '{X:mult,C:white}X#1#{} for each played {C:hearts}Heart{} card',
+            '{X:mult,C:white}X#1#{} for each scored {C:hearts}Heart{} card',
             'if {C:attention}Boss Blind{} is selected',
             'Earn {C:money}$#2#{} when {C:attention}Boss Blind{} is defeated',
         }

@@ -1,3 +1,39 @@
+VanillaRedux = VanillaRedux or {}
+
+function VanillaRedux.to_number(value, fallback)
+    fallback = fallback or 0
+    local kind = type(value)
+    if kind == 'number' then return value end
+    if kind == 'string' then return tonumber(value) or fallback end
+    -- Talisman keeps big numbers as tables. Amulet keeps them as cdata, reported as tables only when its
+    -- type compat option is on.
+    if kind ~= 'table' and kind ~= 'cdata' then return fallback end
+
+    if rawget(_G, 'to_number') then
+        local ok, converted = pcall(to_number, value)
+        if ok and type(converted) == 'number' then return converted end
+    end
+    for _, method in ipairs({ 'to_number', 'toNumber' }) do
+        local ok, converted = pcall(function() return value[method](value) end)
+        if ok and type(converted) == 'number' then return converted end
+    end
+    return tonumber(tostring(value)) or fallback
+end
+
+function VanillaRedux.scale_chips(amount, factor, minimum)
+    if type(amount) == 'number' then
+        return math.max(minimum or 0, math.floor(amount * factor))
+    end
+    local ok, scaled = pcall(function()
+        local product = amount * factor
+        local floored_ok, floored = pcall(function() return product:floor() end)
+        if floored_ok and floored ~= nil then return floored end
+        return product
+    end)
+    if ok then return scaled end
+    return nil
+end
+
 local MOD_FILES = {
     'jokers/8_ball.lua',
     'jokers/abstract.lua',
@@ -93,16 +129,33 @@ SMODS.Atlas {
     path = 'modicon.png'
 }
 
+local failed_files = {}
+
+local function report_error(message)
+    print('Vanilla Redux: '..message)
+    if sendErrorMessage then sendErrorMessage(message, 'VanillaRedux') end
+end
+
+local function with_traceback(err)
+    return debug.traceback(tostring(err), 2)
+end
+
 for _, path in ipairs(MOD_FILES) do
     local chunk, err = SMODS.load_file(path)
     if chunk then
-        local ok, load_err = pcall(chunk)
+        local ok, load_err = xpcall(chunk, with_traceback)
         if not ok then
-            print('Vanilla Redux: Error loading '..path..': '..tostring(load_err))
+            failed_files[#failed_files + 1] = path
+            report_error('Error loading '..path..': '..tostring(load_err))
         end
     else
-        print('Vanilla Redux: Failed to load '..path..': '..tostring(err))
+        failed_files[#failed_files + 1] = path
+        report_error('Failed to load '..path..': '..tostring(err))
     end
 end
 
-print('Vanilla Redux: All files loaded!')
+if #failed_files > 0 then
+    report_error(#failed_files..' file(s) failed to load, some changes are not active: '..table.concat(failed_files, ', '))
+else
+    print('Vanilla Redux: All files loaded!')
+end

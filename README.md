@@ -9,7 +9,10 @@ A balance overhaul mod for [Balatro](https://store.steampowered.com/app/2379780/
 Many jokers and other elements have been reworked and updated — familiar tactics require rethinking, and new strategies emerge. Each run feels fresh and the gameplay becomes more intense.
 
 ## Features
-- Updated and reworked 75 reworked vanilla jokers, 6 spectral and 2 tarot
+- Updated and reworked 75 vanilla jokers, 6 spectral and 2 tarot cards
+
+## Wiki
+All information about the jokers, tarot and spectral cards can be found on the [Vanilla Redux wiki](https://balatromods.miraheze.org/wiki/Vanilla_Redux).
 
 ## Requirements
 - [Steamodded](https://github.com/Steamodded/smods) ≥ `SMODS v26.1002.0`
@@ -33,9 +36,6 @@ Found a bug? Please open an [Issue](../../issues) with a description and any rel
 
 ## Contributing
 Localization suggestions are welcome! Note that translations may become outdated over time as the mod evolves.
-
-## License
-This mod is licensed under the MIT License.
 
 ## Author
 All ideas and code by **CyberGaster**

@@ -4,7 +4,7 @@ SMODS.Joker:take_ownership('shoot_the_moon', {
         text = {
             "Gives {C:mult}+#1#{} Mult for each",
             "{C:hearts}Heart{} card held in hand",
-            "when Queen of {C:spades}Spades{} played"
+            "when Queen of {C:spades}Spades{} is scored"
         }
     },
     config = { extra = 13 },

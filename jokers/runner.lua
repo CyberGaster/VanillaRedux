@@ -2,11 +2,10 @@ SMODS.Joker:take_ownership('runner', {
     loc_txt = {
         name = 'Runner',
         text = {
-            'Gains {C:chips}+15{} Chips if played',
+            'Gains {C:chips}+#2#{} Chips if played',
             'hand contains a {C:attention}Straight{}',
             'Gain increases by {C:chips}+5{} for',
             'each subsequent {C:attention}Straight{}',
-            '{C:inactive}(Next gain: {C:chips}+#2#{C:inactive})',
             '{C:inactive}(Currently {C:chips}+#1#{C:inactive} Chips)'
         }
     },

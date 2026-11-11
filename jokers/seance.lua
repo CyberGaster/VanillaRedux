@@ -1,7 +1,6 @@
 local function seance_do_replacements(source_card)
     local replaced = 0
     if not (G and G.consumeables and G.consumeables.cards) then return 0 end
-    local threshold = (G.GAME and G.GAME.probabilities and G.GAME.probabilities.normal or 1) / 4
     local to_check = {}
     for i = 1, #G.consumeables.cards do
         local c = G.consumeables.cards[i]
@@ -12,7 +11,7 @@ local function seance_do_replacements(source_card)
     for idx, old in ipairs(to_check) do
         if old.area == G.consumeables and old.config and old.config.center and old.ability then
             local seed = 'seance_replace_'..tostring(old.unique_val or idx)..'_'..tostring((source_card and source_card.unique_val) or 'src')
-            if pseudorandom(pseudoseed(seed)) < threshold then
+            if SMODS.pseudorandom_probability(source_card, seed, 1, 4, 'vr_seance') then
                 local had_negative = old.edition and old.edition.negative
                 if old.children and old.children.use_button then old.children.use_button:remove(); old.children.use_button = nil end
                 if old.children and old.children.sell_button then old.children.sell_button:remove(); old.children.sell_button = nil end
@@ -44,12 +43,13 @@ SMODS.Joker:take_ownership('seance', {
         text = {
             'At the start of each round,',
             'for each {C:tarot}Tarot{} or {C:planet}Planet{} you hold,',
-            '{C:green}#1# in 4{} chance to replace it with',
+            '{C:green}#1# in #2#{} chance to replace it with',
             'a random {C:spectral}Spectral{} card'
         }
     },
     loc_vars = function(self, info_queue, card)
-        return { vars = { ''..(G.GAME and G.GAME.probabilities.normal or 1) } }
+        local numerator, denominator = SMODS.get_probability_vars(card, 1, 4, 'vr_seance')
+        return { vars = { numerator, denominator } }
     end,
     calculate = function(self, card, context)
         if context.setting_blind then

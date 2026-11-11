@@ -14,12 +14,14 @@ local SUITS, RANKS
 local get_suit, get_rank, count_by_suit, count_by_rank
 local _ensure_state, build_remaining_hand, compute_expected_draw_space, plan_for_best_hand
 local _find_red_card, _start_shake_loop, _stop_shake_loop
+local pending_red_card
 
 _ensure_state = function()
     G.GAME._vp_redcard = G.GAME._vp_redcard or { pending_plan = {}, round = -1 }
     if G.GAME._vp_redcard.round ~= G.GAME.round then
         G.GAME._vp_redcard.pending_plan = {}
         G.GAME._vp_redcard.round = G.GAME.round
+        G.GAME._vp_redcard.defer_plan = nil
         G.GAME._vp_redcard.ready_wiggle_done = nil
         G.GAME._vp_redcard.shake_loop_running = nil
         G.GAME._vp_redcard.shake_loop_stop = nil
@@ -116,6 +118,30 @@ local function hand_score(name)
     return (h.chips or 0) * (h.mult or 1)
 end
 
+local function current_hand_rules()
+    local params = G.GAME and G.GAME.starting_params
+    local play_limit = math.max(1, math.floor(tonumber(params and params.play_limit) or 5))
+    local flush_size, straight_size, shortcut = 5, 5, false
+    if SMODS then
+        if SMODS.four_fingers then
+            flush_size = tonumber(SMODS.four_fingers('flush')) or 5
+            straight_size = tonumber(SMODS.four_fingers('straight')) or 5
+        end
+        if SMODS.shortcut then shortcut = SMODS.shortcut() and true or false end
+    end
+    return play_limit, flush_size, straight_size, shortcut
+end
+
+-- With Ancient Joker, Stone Cards are one rank group of their own for poker hands (see ancient.lua).
+-- Rank 0 keeps that group out of Straights.
+local STONE_GROUP = 0
+local function stones_share_rank()
+    for _, j in ipairs((G.jokers and G.jokers.cards) or {}) do
+        if j.ability and j.ability.name == 'Ancient Joker' and not j.debuff then return true end
+    end
+    return false
+end
+
 plan_for_best_hand = function(remain, draw_n, exclude_top_n)
     if draw_n <= 0 then return nil, nil end
     local deck_cards = {}
@@ -139,8 +165,8 @@ plan_for_best_hand = function(remain, draw_n, exclude_top_n)
         local h = G.GAME.hands[name]
         if not h then return nil, get_rank_index(name) end
         local chips, mult = h.chips, h.mult
-        local cnum = (type(chips) == 'number') and chips or tonumber(chips)
-        local mnum = (type(mult) == 'number') and mult or tonumber(mult)
+        local cnum = chips ~= nil and VanillaRedux.to_number(chips) or nil
+        local mnum = mult ~= nil and VanillaRedux.to_number(mult) or nil
         if cnum and mnum then return (cnum * mnum), get_rank_index(name) end
         return nil, get_rank_index(name)
     end
@@ -166,8 +192,8 @@ plan_for_best_hand = function(remain, draw_n, exclude_top_n)
         end
     end
 
-    local play_limit = G.GAME and G.GAME.starting_params and tonumber(G.GAME.starting_params.play_limit) or 5
-    local target_size = math.max(1, math.min(5, play_limit))
+    local play_limit, flush_size, straight_size, shortcut = current_hand_rules()
+    local stone_group = stones_share_rank()
 
     local function best_name_from_results(results)
         local best_n, sc_best, fb_best = nil, nil, -1
@@ -190,94 +216,93 @@ plan_for_best_hand = function(remain, draw_n, exclude_top_n)
         return best_n
     end
 
+    local function fits(cards_needed) return cards_needed <= play_limit end
+
+    local function top_two(counts)
+        local first, second = 0, 0
+        for _, cnt in pairs(counts) do
+            if cnt > first then second = first; first = cnt
+            elseif cnt > second then second = cnt end
+        end
+        return first, second
+    end
+
+    local function longest_run(rank_counts)
+        local ranks = {}
+        for r in pairs(rank_counts) do
+            if r >= 2 and r <= 14 then ranks[#ranks+1] = r end
+        end
+        table.sort(ranks)
+        if rank_counts[14] then table.insert(ranks, 1, 1) end
+        local best, run = (#ranks > 0) and 1 or 0, 1
+        for i = 2, #ranks do
+            local gap = ranks[i] - ranks[i-1]
+            if gap == 1 or (shortcut and gap == 2) then
+                run = run + 1
+                if run > best then best = run end
+            else
+                run = 1
+            end
+        end
+        return best
+    end
+
     local function evaluate_pool(pool)
-        if #pool < target_size then return nil end
-        if #pool == target_size then
+        if #pool == 0 then return nil end
+        -- Everything in hand can be played at once, so the game's own evaluation is exact.
+        if #pool <= play_limit then
             if not rawget(_G,'evaluate_poker_hand') then return nil end
             local ok, results = pcall(evaluate_poker_hand, pool)
             if ok and results then return best_name_from_results(results) end
             return nil
         end
-        local rc, sc = {}, {}
-        local rs = {}
+        -- Only play_limit cards can be played out of a bigger hand, so every hand below also has to
+        -- fit in play_limit. Flush and Straight sizes come from SMODS (Four Fingers and other mods).
+        local suit_list = (SMODS and SMODS.Suit and SMODS.Suit.obj_buffer) or SUITS
+        local rc, sc, rs = {}, {}, {}
         for _, c in ipairs(pool) do
             local r = get_rank(c)
-            local s = get_suit(c)
+            if stone_group and c.ability and c.ability.effect == 'Stone Card' then r = STONE_GROUP end
             if r then rc[r] = (rc[r] or 0) + 1 end
-            if s then sc[s] = (sc[s] or 0) + 1 end
-            if r and s then
-                rs[s] = rs[s] or {}
-                rs[s][r] = (rs[s][r] or 0) + 1
-            end
-        end
-        local m1, m2 = 0, 0
-        for _, cnt in pairs(rc) do
-            if cnt > m1 then m2 = m1; m1 = cnt
-            elseif cnt > m2 then m2 = cnt end
-        end
-        local fl_suit = nil
-        for s, cnt in pairs(sc) do
-            if cnt >= target_size then fl_suit = s; break end
-        end
-        local urank = {}
-        for r, _ in pairs(rc) do urank[#urank+1] = r end
-        table.sort(urank)
-        if rc[14] then table.insert(urank, 1, 1) end
-        local has_str = false
-        local run = 1
-        for i = 2, #urank do
-            if urank[i] == urank[i-1] + 1 then
-                run = run + 1
-                if run >= target_size then has_str = true; break end
-            elseif urank[i] ~= urank[i-1] then run = 1 end
-        end
-        local has_sf = false
-        if fl_suit then
-            local fr = {}
-            for r, _ in pairs(rs[fl_suit] or {}) do fr[#fr+1] = r end
-            table.sort(fr)
-            if rs[fl_suit] and rs[fl_suit][14] then table.insert(fr, 1, 1) end
-            local frun = 1
-            for i = 2, #fr do
-                if fr[i] == fr[i-1] + 1 then
-                    frun = frun + 1
-                    if frun >= target_size then has_sf = true; break end
-                elseif fr[i] ~= fr[i-1] then frun = 1 end
-            end
-        end
-        local has_fh = false
-        if fl_suit then
-            local fm1, fm2 = 0, 0
-            for _, cnt in pairs(rs[fl_suit] or {}) do
-                if cnt > fm1 then fm2 = fm1; fm1 = cnt
-                elseif cnt > fm2 then fm2 = cnt end
-            end
-            has_fh = (fm1 >= 3 and fm2 >= 2)
-        end
-        local has_f5 = false
-        if m1 >= 5 then
-            for _, rr in pairs(rs) do
-                for _, cnt in pairs(rr) do
-                    if cnt >= 5 then has_f5 = true end
+            for _, s in ipairs(suit_list) do
+                if c.is_suit and c:is_suit(s, nil, true) then
+                    sc[s] = (sc[s] or 0) + 1
+                    if r then
+                        rs[s] = rs[s] or {}
+                        rs[s][r] = (rs[s][r] or 0) + 1
+                    end
                 end
             end
         end
+        local m1, m2 = top_two(rc)
         local pcnt = 0
         for _, cnt in pairs(rc) do
             if cnt >= 2 then pcnt = pcnt + 1 end
         end
+        local has_flush, has_sf, has_fh, has_f5 = false, false, false, false
+        for s, cnt in pairs(sc) do
+            if cnt >= flush_size then
+                has_flush = true
+                local by_rank = rs[s] or {}
+                if longest_run(by_rank) >= straight_size then has_sf = true end
+                local f1, f2 = top_two(by_rank)
+                if f1 >= 3 and f2 >= 2 then has_fh = true end
+                if f1 >= 5 then has_f5 = true end
+            end
+        end
+        local has_str = longest_run(rc) >= straight_size
         local valid = {}
-        if has_f5 then valid['Flush Five'] = true end
-        if m1 >= 5 then valid['Five of a Kind'] = true end
-        if has_sf then valid['Straight Flush'] = true end
-        if has_fh then valid['Flush House'] = true end
-        if m1 >= 4 then valid['Four of a Kind'] = true end
-        if m1 >= 3 and m2 >= 2 then valid['Full House'] = true end
-        if fl_suit then valid['Flush'] = true end
-        if has_str then valid['Straight'] = true end
-        if m1 >= 3 then valid['Three of a Kind'] = true end
-        if pcnt >= 2 then valid['Two Pair'] = true end
-        if pcnt >= 1 then valid['Pair'] = true end
+        if has_f5 and fits(5) then valid['Flush Five'] = true end
+        if m1 >= 5 and fits(5) then valid['Five of a Kind'] = true end
+        if has_sf and fits(math.max(flush_size, straight_size)) then valid['Straight Flush'] = true end
+        if has_fh and fits(5) then valid['Flush House'] = true end
+        if m1 >= 4 and fits(4) then valid['Four of a Kind'] = true end
+        if m1 >= 3 and m2 >= 2 and fits(5) then valid['Full House'] = true end
+        if has_flush and fits(flush_size) then valid['Flush'] = true end
+        if has_str and fits(straight_size) then valid['Straight'] = true end
+        if m1 >= 3 and fits(3) then valid['Three of a Kind'] = true end
+        if pcnt >= 2 and fits(4) then valid['Two Pair'] = true end
+        if pcnt >= 1 and fits(2) then valid['Pair'] = true end
         valid['High Card'] = true
         local best_n, vsc_best, vfb_best = nil, nil, -1
         for _, name in ipairs(names_priority) do
@@ -345,8 +370,8 @@ G.FUNCS.draw_from_deck_to_hand = function(e)
                         break
                     end
                 end
-                local ref = st.red_card_ref
-                if ref and target_name then
+                local ref = pending_red_card
+                if ref and not ref.removed and ref.area == G.jokers and target_name then
                     G.E_MANAGER:add_event(Event({
                         trigger = 'after',
                         delay = 0.4,
@@ -360,16 +385,16 @@ G.FUNCS.draw_from_deck_to_hand = function(e)
                 end
             end
         end
-        st.defer_plan = nil
-        st.red_card_ref = nil
     end
+    st.defer_plan = nil
+    pending_red_card = nil
     return old_draw(e)
 end
 
 local old_discard = G.FUNCS.discard_cards_from_highlighted
 G.FUNCS.discard_cards_from_highlighted = function(e, hook)
     local cr = G.GAME and G.GAME.current_round
-    if cr and (cr.discards_left or 0) == 1 and #G.hand.highlighted > 0 then
+    if not hook and cr and (cr.discards_left or 0) == 1 and #G.hand.highlighted > 0 then
         local has_red = false
         local red_card_ref = nil
         if G.jokers and G.jokers.cards then
@@ -395,7 +420,7 @@ G.FUNCS.discard_cards_from_highlighted = function(e, hook)
             if draw_n > 0 then
                 local st = _ensure_state()
                 st.defer_plan = true
-                st.red_card_ref = red_card_ref
+                pending_red_card = red_card_ref
                 _stop_shake_loop()
             end
         end
@@ -417,7 +442,7 @@ function Card:calculate_joker(context)
                 local draw_n = compute_expected_draw_space(#remain)
                 if draw_n > 0 then
                     st.defer_plan = true
-                    st.red_card_ref = self
+                    pending_red_card = self
                     _stop_shake_loop()
                 end
             end

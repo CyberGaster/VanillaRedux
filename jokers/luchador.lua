@@ -12,8 +12,8 @@ SMODS.Joker:take_ownership('luchador', {
             local blind = G.GAME and G.GAME.blind
             if blind and blind.boss and not blind.disabled then
                 local before = blind.chips or 0
-                local reduced = math.max(0, math.floor(before * 0.9))
-                if reduced < before then
+                local reduced = VanillaRedux.scale_chips(before, 0.9, 0)
+                if reduced ~= nil and reduced < before then
                     blind.chips = reduced
                     blind.chip_text = number_format(blind.chips)
                     local hud = G.HUD_blind and G.HUD_blind:get_UIE_by_ID('HUD_blind_count')

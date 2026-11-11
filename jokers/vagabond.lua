@@ -72,7 +72,7 @@ SMODS.Joker:take_ownership('vagabond', {
         if not G.GAME then return nil end
         if not has_room() then return nil end
 
-        local dollars = tonumber(G.GAME.dollars) or 0
+        local dollars = VanillaRedux.to_number(G.GAME.dollars, 0)
         if dollars > (card.ability.extra or 4) then return nil end
 
         local kind = pick_type(context.blueprint_card or card)

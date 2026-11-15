@@ -18,22 +18,16 @@ SMODS.Joker:take_ownership('joker', {
             }
         end
 
-        if context.end_of_round and not context.individual and not context.repetition and not context.blueprint then
-            if G.GAME.blind and G.GAME.blind.boss then
-                card.ability.mult = card.ability.mult * 2
-                
-                G.E_MANAGER:add_event(Event({
-                    func = function()
-                        card:juice_up(0.8, 0.8)
-                        return true
-                    end
-                }))
-
-                return {
-                    message = localize('k_upgrade_ex'),
-                    colour = G.C.MULT
-                }
-            end
+        if context.end_of_round and context.main_eval and context.beat_boss and not context.blueprint then
+            SMODS.scale_card(card, {
+                ref_table = card.ability,
+                ref_value = 'mult',
+                scalar_table = { factor = 2 },
+                scalar_value = 'factor',
+                operation = 'X',
+                message_colour = G.C.MULT,
+            })
+            return nil, true
         end
     end,
 })

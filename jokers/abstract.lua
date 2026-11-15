@@ -262,7 +262,7 @@ SMODS.Joker:take_ownership('abstract', {
         text = {
             'When {C:attention}Blind{} is selected,',
             'randomly copies the effect of',
-            'any other {C:attention}non-legendary{} Joker',
+            'any other {C:attention}non-Legendary{} Joker',
             '{C:inactive}Resets effect at end of round{}',
             '{C:inactive}(Currently copying {C:attention}#1#{}{C:inactive})'
         }

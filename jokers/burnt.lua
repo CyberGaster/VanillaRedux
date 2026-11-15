@@ -9,36 +9,32 @@ SMODS.Joker:take_ownership('burnt', {
     },
 })
 
-local function to_num(v)
-    if type(v) == 'number' then return v end
-    if type(v) == 'cdata' then return VanillaRedux.to_number(v, 0) end
-    if type(v) == 'string' then local n = tonumber(v); if n then return n end end
-    if type(v) == 'table' then
-        if type(v.toNumber) == 'function' then local ok, res = pcall(v.toNumber, v); if ok and type(res) == 'number' then return res end end
-        if type(v.tonumber) == 'function' then local ok, res = pcall(v.tonumber, v); if ok and type(res) == 'number' then return res end end
-        if type(v.to_number) == 'function' then local ok, res = pcall(v.to_number, v); if ok and type(res) == 'number' then return res end end
-        if type(v.value) == 'number' then return v.value end
-        if type(v.val) == 'number' then return v.val end
-        if type(v.chips) == 'number' then return v.chips end
-        local mt = getmetatable(v)
-        if mt and type(mt.__tostring) == 'function' then local s = tostring(v); local n = tonumber(s); if n then return n end end
-    end
-    return 0
-end
-
+-- Scores and Blind sizes stay big numbers when they do not fit a plain number, so the "burning"
+-- check keeps working past ~1.8e308 with Talisman or Amulet.
 local function current_hand_id() return (rawget(_G, 'G') and G.GAME and G.GAME.hands_played) or 0 end
-local function blind_required() local req = (rawget(_G, 'G') and G.GAME and G.GAME.blind and G.GAME.blind.chips) or math.huge; return to_num(req) end
+local function blind_required()
+    local req = rawget(_G, 'G') and G.GAME and G.GAME.blind and G.GAME.blind.chips
+    if req == nil then return math.huge end
+    return VanillaRedux.plain_or_big(req)
+end
 local function base_earned_for(hand_name)
     if not (rawget(_G, 'G') and G.GAME and G.GAME.hands and G.GAME.hands[hand_name]) then return 0 end
     local h = G.GAME.hands[hand_name]
     local chips_raw = (rawget(_G, 'mod_chips') and mod_chips(h.chips)) or h.chips
     local mult_raw  = (rawget(_G, 'mod_mult') and mod_mult(h.mult)) or h.mult
-    return math.floor(to_num(chips_raw) * to_num(mult_raw))
+    local chips, mult = VanillaRedux.plain_or_big(chips_raw), VanillaRedux.plain_or_big(mult_raw)
+    if type(chips) == 'number' and type(mult) == 'number' then return math.floor(chips * mult) end
+    return VanillaRedux.floor(VanillaRedux.big(chips) * VanillaRedux.big(mult))
 end
 local function final_chip_total()
     local cr = rawget(_G, 'G') and G.GAME and G.GAME.current_round and G.GAME.current_round.current_hand
-    return cr and to_num(cr.chip_total) or 0
+    return cr and cr.chip_total ~= nil and VanillaRedux.plain_or_big(cr.chip_total) or 0
 end
+local function is_zero(value)
+    return type(value) == 'number' and value == 0
+end
+
+local last_chip_total = 0
 
 local function try_wrap_update_hand_text()
     if rawget(_G, 'VP_BURNT_UHT_WRAPPED') then return end
@@ -46,8 +42,8 @@ local function try_wrap_update_hand_text()
     _G.VP_BURNT_UHT_WRAPPED = true
     local _old = update_hand_text
     update_hand_text = function(config, vals)
-        if vals and vals.chip_total ~= nil and rawget(_G, 'G') and G.GAME then
-            G.GAME._vp_burnt_chip_total = to_num(vals.chip_total)
+        if vals and vals.chip_total ~= nil then
+            last_chip_total = VanillaRedux.plain_or_big(vals.chip_total)
         end
         return _old(config, vals)
     end
@@ -66,7 +62,7 @@ if not rawget(_G, 'VP_BURNT_REWORKED') and rawget(_G, 'Card') and Card.calculate
             if context and context.pre_discard and not context.hook then return nil end
             if context and context.before and context.scoring_name and not ses.done then
                 local earned, req = base_earned_for(context.scoring_name), blind_required()
-                if to_num(earned) >= to_num(req) and to_num(req) > 0 then
+                if VanillaRedux.gt(req, 0) and VanillaRedux.ge(earned, req) then
                     ses.done = true
                     level_up_hand(nil, context.scoring_name)
                     return { message = localize('k_upgrade_ex') }
@@ -79,9 +75,10 @@ if not rawget(_G, 'VP_BURNT_REWORKED') and rawget(_G, 'Card') and Card.calculate
                         trigger = 'after', delay = 0.62,
                         func = function()
                             local req = blind_required()
-                            local ct = to_num((rawget(_G, 'G') and G.GAME and G.GAME._vp_burnt_chip_total) or 0); if ct == 0 then ct = final_chip_total() end
+                            local ct = last_chip_total
+                            if is_zero(ct) then ct = final_chip_total() end
                             local _ses = state_card.ability and state_card.ability._vp_burnt
-                            if _ses and not _ses.done and to_num(req) > 0 and to_num(ct) >= to_num(req) then
+                            if _ses and not _ses.done and VanillaRedux.gt(req, 0) and VanillaRedux.ge(ct, req) then
                                 _ses.done = true
                                 if rawget(_G, 'update_hand_text') and rawget(_G, 'G') and G.GAME and G.GAME.hands and G.GAME.hands[hand_name] then
                                     local h = G.GAME.hands[hand_name]

@@ -9,11 +9,20 @@ local function count_other_active_four_fingers(card)
     return count
 end
 
--- Overridden at load time rather than in add_to_deck: loading a saved run does not call
--- add_to_deck, so a patch installed there is missing after a restart and the vanilla
--- 4-card Straight/Flush returns.
-function SMODS.four_fingers(hand_type)
-    return 5
+if not rawget(_G, 'VR_FOUR_FINGERS_PATCHED') then
+    local previous_four_fingers = SMODS.four_fingers
+    function SMODS.four_fingers(hand_type)
+        local find_card = SMODS.find_card
+        SMODS.find_card = function(key, ...)
+            if key == 'j_four_fingers' then return {} end
+            return find_card(key, ...)
+        end
+        local ok, result = pcall(previous_four_fingers, hand_type)
+        SMODS.find_card = find_card
+        if not ok then error(result, 0) end
+        return result
+    end
+    _G.VR_FOUR_FINGERS_PATCHED = true
 end
 
 SMODS.Joker:take_ownership('four_fingers', {
@@ -40,7 +49,7 @@ SMODS.Joker:take_ownership('four_fingers', {
     end,
     remove_from_deck = function(self, card, from_debuff)
         G.GAME.round_resets.hands = G.GAME.round_resets.hands - (card.ability.extra.hands or 1)
-        G.GAME.current_round.hands_left = math.max(0, G.GAME.current_round.hands_left - (card.ability.extra.hands or 1))
+        VanillaRedux.remove_hands_this_round(card.ability.extra.hands or 1)
         if count_other_active_four_fingers(card) == 0 then
             SMODS.change_play_limit(-(card.ability.extra.play_limit or -1))
         end

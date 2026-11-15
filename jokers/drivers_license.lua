@@ -4,7 +4,7 @@ local function count_enhanced_cards_in_full_deck()
     if not (rawget(_G, 'G') and G.playing_cards) then return 0 end
     local count = 0
     for _, v in pairs(G.playing_cards) do
-        if v and v.ability and v.ability.set == 'Enhanced' then
+        if v and next(SMODS.get_enhancements(v)) then
             count = count + 1
         end
     end
@@ -15,9 +15,8 @@ SMODS.Joker:take_ownership('drivers_license', {
     loc_txt = {
         name = "Driver's License",
         text = {
-            'This Joker gains {X:mult,C:white}X#1#{} Mult',
-            'for each {C:attention}Enhanced{} card',
-            'in your full deck',
+            'Gives {X:mult,C:white}X#1#{} Mult for each',
+            '{C:attention}Enhanced{} card in your full deck',
             '{C:inactive}(Currently {X:mult,C:white}X#2#{C:inactive} Mult)'
         }
     },

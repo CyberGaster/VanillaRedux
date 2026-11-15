@@ -25,11 +25,15 @@ SMODS.Joker:take_ownership('banner', {
             if not context.blueprint then
                 local discards_left = G.GAME.current_round.discards_left or 0
                 if discards_left > 0 then
-                    card.ability.extra = card.ability.extra + (discards_left * 15)
-                    return {
-                        message = 'Upgrade!',
-                        colour = G.C.CHIPS
-                    }
+                    SMODS.scale_card(card, {
+                        ref_table = card.ability,
+                        ref_value = 'extra',
+                        scalar_table = { chips_per_discard = 15 },
+                        scalar_value = 'chips_per_discard',
+                        scalar_factor = discards_left,
+                        message_colour = G.C.CHIPS,
+                    })
+                    return nil, true
                 end
             end
         end

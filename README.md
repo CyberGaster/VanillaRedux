@@ -12,14 +12,14 @@ Many jokers and other elements have been reworked and updated — familiar tacti
 - Updated and reworked 75 vanilla jokers, 6 spectral and 2 tarot cards
 
 ## Wiki
-All information about the jokers, tarot and spectral cards can be found on the [Vanilla Redux wiki](https://balatromods.miraheze.org/wiki/Vanilla_Redux).
+All information about the jokers, tarot and spectral cards can be found on the [VanillaRedux wiki](https://balatromods.miraheze.org/wiki/Vanilla_Redux).
 
 ## Requirements
 - [Steamodded](https://github.com/Steamodded/smods) ≥ `SMODS v26.1002.0`
 - [Lovely](https://github.com/ethangreen-dev/lovely-injector) ≥ `0.10.0`
 
 ## Compatibility
-Tested with vanilla Balatro and [Talisman](https://github.com/MathIsFun0/Talisman). Other mods may cause conflicts — please report incompatibilities via [Issues](../../issues).
+Tested with vanilla Balatro, [Talisman](https://github.com/MathIsFun0/Talisman) and [Amulet](https://github.com/frostice482/amulet). Other mods may cause conflicts — please report incompatibilities via [Issues](../../issues).
 
 ## Installation
 1. Install [Steamodded](https://github.com/Steamodded/smods) and [Lovely](https://github.com/ethangreen-dev/lovely-injector).

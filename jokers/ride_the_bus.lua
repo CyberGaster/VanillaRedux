@@ -15,10 +15,11 @@ SMODS.Joker:take_ownership('ride_the_bus', {
     end,
     set_ability = function(self, card, initial, delay_sprites)
         card.ability.x_mult = card.ability.x_mult or 1
-        card.ability.mult = card.ability.x_mult
     end,
     calculate = function(self, card, context)
         if context.before and not context.blueprint then
+            card.ability.mult = 0
+            card.ability.x_mult = card.ability.x_mult or 1
             local has_face = false
             if context.scoring_hand then
                 for i = 1, #context.scoring_hand do
@@ -29,29 +30,27 @@ SMODS.Joker:take_ownership('ride_the_bus', {
                 end
             end
             if has_face then
-                local last = card.ability.x_mult or 1
-                card.ability.x_mult = 1
-                card.ability.mult = card.ability.x_mult
-                if last > 1 then
-                    return {
-                        card = card,
-                        message = localize('k_reset')
-                    }
+                if card.ability.x_mult > 1 then
+                    SMODS.reset_card(card, {
+                        ref_table = card.ability,
+                        ref_value = 'x_mult',
+                        reset_value = 1,
+                    })
                 end
             else
-                card.ability.x_mult = (card.ability.x_mult or 1) + (card.ability.extra or 0.05)
-                card.ability.mult = card.ability.x_mult
+                SMODS.scale_card(card, {
+                    ref_table = card.ability,
+                    ref_value = 'x_mult',
+                    scalar_value = 'extra',
+                    no_message = true,
+                })
             end
             return {}
         end
         if context.joker_main then
             local x = card.ability.x_mult or 1
             if x > 1 then
-                return {
-                    message = localize{type='variable', key='a_xmult', vars={x}},
-                    Xmult_mod = x,
-                    card = card
-                }
+                return { x_mult = x }
             end
             return {}
         end

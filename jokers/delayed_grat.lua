@@ -1,18 +1,3 @@
-local function _dg_to_number(x)
-    if type(x) == 'number' then return x end
-    if type(x) == 'cdata' then return VanillaRedux.to_number(x, 0) end
-    if type(x) == 'string' then return tonumber(x) or 0 end
-    if type(x) == 'table' then
-        local ok, v
-        if x.toNumber then ok, v = pcall(function() return x:toNumber() end); if ok and type(v) == 'number' then return v end end
-        if x.to_number then ok, v = pcall(function() return x:to_number() end); if ok and type(v) == 'number' then return v end end
-        local s = tostring(x)
-        local n = tonumber(s)
-        if n then return n end
-    end
-    return 0
-end
-
 local function update_sell_cost(card)
     if not card or not card.ability then return end
     local extra = card.ability.extra
@@ -20,9 +5,9 @@ local function update_sell_cost(card)
     
     local base = extra.base_sell or 1
     local stored = extra.stored_value or 0
-    local total = base + stored + (card.ability.extra_value or 0)
+    local total = VanillaRedux.plain_or_big(base + stored + (card.ability.extra_value or 0))
     
-    card.sell_cost = math.max(1, math.ceil(total))
+    card.sell_cost = VanillaRedux.gt(1, total) and 1 or VanillaRedux.ceil(total)
     card.sell_cost_label = card.sell_cost
 end
 
@@ -30,7 +15,7 @@ SMODS.Joker:take_ownership('delayed_grat', {
     loc_txt = {
         name = 'Delayed Gratification',
         text = {
-            'Takes {C:attention}25%{} of earned money at',
+            'Takes {C:attention}25%{} of money earned at',
             'end of round and adds to {C:money}sell value{}',
             'Sell value increases by {C:attention}50%{}',
             'when {C:attention}Boss Blind{} is defeated'
@@ -127,30 +112,29 @@ SMODS.Joker:take_ownership('delayed_grat', {
                 local extra = card.ability.extra
                 if type(extra) ~= 'table' then return end
 
-                local round_dollars = _dg_to_number(G.GAME.current_round.dollars)
-                if round_dollars > 0 then
-                    local raw_take = round_dollars * (extra.take_percent or 0.25)
-                    local take_amount = math.ceil(raw_take)
-                    if take_amount > 0 then
+                local round_dollars = VanillaRedux.plain_or_big(G.GAME.current_round.dollars or 0)
+                if VanillaRedux.gt(round_dollars, 0) then
+                    local take_amount = VanillaRedux.ceil(round_dollars * (extra.take_percent or 0.25))
+                    if VanillaRedux.gt(take_amount, 0) then
                         G.GAME.current_round.dollars = round_dollars - take_amount
-                        extra.stored_value = (extra.stored_value or 0) + take_amount
+                        extra.stored_value = VanillaRedux.plain_or_big((extra.stored_value or 0) + take_amount)
                         update_sell_cost(card)
                         card:juice_up(0.8, 0.8)
                         if rawget(_G,'card_eval_status_text') then
                             card_eval_status_text(card, 'extra', nil, nil, nil, {
-                                message = '+$'..take_amount,
+                                message = '+$'..VanillaRedux.format_number(take_amount),
                                 colour = G.C.MONEY
                             })
                         end
                     end
                 end
 
-                if extra._boss_defeated_this_round and (extra.stored_value or 0) > 0 then
+                if extra._boss_defeated_this_round and VanillaRedux.gt(extra.stored_value or 0, 0) then
                     local bonus_mult = extra.boss_bonus or 0.5
                     local current_value = extra.stored_value or 0
-                    local bonus = math.ceil(current_value * bonus_mult)
-                    if bonus > 0 then
-                        extra.stored_value = math.ceil(current_value + bonus)
+                    local bonus = VanillaRedux.ceil(current_value * bonus_mult)
+                    if VanillaRedux.gt(bonus, 0) then
+                        extra.stored_value = VanillaRedux.plain_or_big(VanillaRedux.ceil(current_value + bonus))
                         update_sell_cost(card)
                         G.E_MANAGER:add_event(Event({
                             trigger = 'after',

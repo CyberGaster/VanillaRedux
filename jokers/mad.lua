@@ -12,7 +12,7 @@ SMODS.Joker:take_ownership('mad', {
         text = {
             '{C:mult}+10{} Mult if played hand',
             'contains a {C:attention}Two Pair{}',
-            '{C:mult}+2{} mult for each additional level',
+            '{C:mult}+2{} Mult for each additional level',
             'of the {C:attention}Two Pair{} poker hand',
             '{C:inactive}(Currently {C:mult}+#1#{} {C:inactive}Mult)'
         }

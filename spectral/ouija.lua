@@ -31,7 +31,10 @@ SMODS.Consumable:take_ownership('c_ouija', {
         end
         delay(0.2)
 
-        local _rank = pseudorandom_element({'2','3','4','5','6','7','8','9','10','Jack','Queen','King','Ace'}, pseudoseed('ouija'))
+        -- Ranks come from Steamodded, so ranks added by other mods can be rolled too.
+        local ranks = VanillaRedux.pool_ranks()
+        local _rank = #ranks > 0 and pseudorandom_element(ranks, pseudoseed('ouija')).key
+            or pseudorandom_element({'2','3','4','5','6','7','8','9','10','Jack','Queen','King','Ace'}, pseudoseed('ouija'))
         for i = 1, #G.hand.cards do
             G.E_MANAGER:add_event(Event({func = function()
                 local c = G.hand.cards[i]
@@ -51,8 +54,10 @@ SMODS.Consumable:take_ownership('c_ouija', {
         end
         delay(0.5)
 
+        -- The current round is marked as already applied, so the -1 hand size starts next round,
+        -- whether Ouija is used during a round or in the shop.
         local stacks = get_ouija_stacks()
-        stacks[#stacks + 1] = { rounds_left = 3, applied_round = -1 }
+        stacks[#stacks + 1] = { rounds_left = 3, applied_round = G.GAME.round or 0 }
     end,
 })
 

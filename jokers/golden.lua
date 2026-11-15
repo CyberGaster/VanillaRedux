@@ -4,7 +4,7 @@ local function count_rare_legendary()
         for i = 1, #G.jokers.cards do
             local joker = G.jokers.cards[i]
             local rarity = joker.config and joker.config.center and joker.config.center.rarity
-            if type(rarity) == 'number' and rarity >= 3 then
+            if rarity ~= nil and VanillaRedux.is_rare_or_better(rarity) then
                 count = count + 1
             end
         end
@@ -18,7 +18,7 @@ SMODS.Joker:take_ownership('golden', {
         text = {
             'Earn {C:money}$#1#{} at end of round',
             'Payout increases by {C:money}$#2#{} for',
-            'each {C:red}rare{} or {C:legendary}legendary{} joker'
+            'each {C:red}Rare{} or {C:legendary}Legendary{} Joker'
         }
     },
     config = { extra = { base = 4, per_rare = 2 } },

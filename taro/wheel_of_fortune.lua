@@ -14,6 +14,10 @@ SMODS.Consumable:take_ownership('c_wheel_of_fortune', {
         }
     },
     loc_vars = function(self, info_queue, card)
+        info_queue[#info_queue + 1] = G.P_CENTERS.e_foil
+        info_queue[#info_queue + 1] = G.P_CENTERS.e_holo
+        info_queue[#info_queue + 1] = G.P_CENTERS.e_polychrome
+        info_queue[#info_queue + 1] = G.P_CENTERS.e_negative
         local numerator, denominator = SMODS.get_probability_vars(card, 1, card.ability.extra or 4, 'vr_wheel_of_fortune')
         return { vars = { numerator, denominator } }
     end,

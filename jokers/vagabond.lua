@@ -28,25 +28,16 @@ local function has_room()
     return current < (G.consumeables.config.card_limit or 0)
 end
 
-local function spawn_consumable(card, kind)
+local function spawn_consumable(kind)
     G.GAME.consumeable_buffer = (G.GAME.consumeable_buffer or 0) + 1
     G.E_MANAGER:add_event(Event({
         func = function()
-            G.E_MANAGER:add_event(Event({
-                func = function()
-                    local newc = create_card(kind, G.consumeables, nil, nil, nil, nil, nil, 'vag')
-                    if newc then
-                        newc:add_to_deck()
-                        G.consumeables:emplace(newc)
-                    end
-                    G.GAME.consumeable_buffer = math.max(0, (G.GAME.consumeable_buffer or 1) - 1)
-                    return true
-                end
-            }))
-            card_eval_status_text(card, 'extra', nil, nil, nil, {
-                message = localize(MSG_KEYS[kind]),
-                colour = COLORS[kind]()
-            })
+            local newc = create_card(kind, G.consumeables, nil, nil, nil, nil, nil, 'vag')
+            if newc then
+                newc:add_to_deck()
+                G.consumeables:emplace(newc)
+            end
+            G.GAME.consumeable_buffer = math.max(0, (G.GAME.consumeable_buffer or 1) - 1)
             return true
         end
     }))
@@ -76,7 +67,7 @@ SMODS.Joker:take_ownership('vagabond', {
         if dollars > (card.ability.extra or 4) then return nil end
 
         local kind = pick_type(context.blueprint_card or card)
-        spawn_consumable(context.blueprint_card or card, kind)
-        return {}
+        spawn_consumable(kind)
+        return { extra = { message = localize(MSG_KEYS[kind]), colour = COLORS[kind]() } }
     end,
 })

@@ -3,7 +3,7 @@ local function count_stone_in_deck()
     if rawget(_G, 'G') and G.playing_cards then
         for i = 1, #G.playing_cards do
             local c = G.playing_cards[i]
-            if c and c.config and c.config.center == G.P_CENTERS.m_stone then
+            if c and SMODS.has_enhancement(c, 'm_stone') then
                 count = count + 1
             end
         end

@@ -37,3 +37,14 @@ SMODS.Joker:take_ownership('stencil', {
     end,
     blueprint_compat = true,
 })
+
+if not rawget(_G, 'VR_STENCIL_UPDATE_PATCHED') and rawget(_G, 'Card') and Card.update then
+    local old_update = Card.update
+    function Card:update(dt)
+        old_update(self, dt)
+        if self.ability and self.ability.name == 'Joker Stencil' and G.STAGE == G.STAGES.RUN and G.jokers then
+            self.ability.x_mult = count_negative_jokers() * 2 + 1
+        end
+    end
+    _G.VR_STENCIL_UPDATE_PATCHED = true
+end

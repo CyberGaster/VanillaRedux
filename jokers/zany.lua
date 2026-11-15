@@ -12,7 +12,7 @@ SMODS.Joker:take_ownership('zany', {
         text = {
             '{C:mult}+12{} Mult if played hand',
             'contains a {C:attention}Three of a Kind{}',
-            '{C:mult}+3{} mult for each additional level',
+            '{C:mult}+3{} Mult for each additional level',
             'of the {C:attention}Three of a Kind{} poker hand',
             '{C:inactive}(Currently {C:mult}+#1#{} {C:inactive}Mult)'
         }

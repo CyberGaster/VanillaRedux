@@ -18,50 +18,24 @@ SMODS.Joker:take_ownership('square', {
             card.ability.extra.mult_mod,
         } }
     end,
-    set_ability = function(self, card, initial, delay_sprites)
-        card.ability.extra = card.ability.extra or {}
-        card.ability.extra.chips = card.ability.extra.chips or 0
-        card.ability.extra.chip_mod = card.ability.extra.chip_mod or 4
-        card.ability.extra.mult = card.ability.extra.mult or 0
-        card.ability.extra.mult_mod = card.ability.extra.mult_mod or 4
-    end,
     calculate = function(self, card, context)
-        if context.before and not context.blueprint then
-            if context.full_hand and #context.full_hand == 4 then
-                local seed = 'square_'..tostring(G.GAME.round or 0)..'_'..tostring((G.GAME.current_round and G.GAME.current_round.hands_played) or 0)
-                if pseudorandom(pseudoseed(seed)) < 0.5 then
-                    card.ability.extra.chips = card.ability.extra.chips + card.ability.extra.chip_mod
-                    return {
-                        message = '+' .. card.ability.extra.chip_mod .. ' Chips',
-                        colour = G.C.CHIPS,
-                        card = card
-                    }
-                else
-                    card.ability.extra.mult = card.ability.extra.mult + card.ability.extra.mult_mod
-                    return {
-                        message = '+' .. card.ability.extra.mult_mod .. ' Mult',
-                        colour = G.C.MULT,
-                        card = card
-                    }
-                end
-            end
-            return {}
+        if context.before and not context.blueprint and context.full_hand and #context.full_hand == 4 then
+            local gains_chips = pseudorandom('vr_square') < 0.5
+            SMODS.scale_card(card, {
+                ref_table = card.ability.extra,
+                ref_value = gains_chips and 'chips' or 'mult',
+                scalar_value = gains_chips and 'chip_mod' or 'mult_mod',
+                message_key = gains_chips and 'a_chips' or 'a_mult',
+                message_colour = gains_chips and G.C.CHIPS or G.C.MULT,
+            })
+            return nil, true
         end
         if context.joker_main then
-            local c = card.ability.extra.chips
-            local m = card.ability.extra.mult
-            if c > 0 and m > 0 then
-                return {
-                    chips = c,
-                    mult = m
-                }
-            elseif c > 0 then
-                return { chips = c }
-            elseif m > 0 then
-                return { mult = m }
-            end
-            return {}
+            local extra = card.ability.extra
+            return {
+                chips = extra.chips > 0 and extra.chips or nil,
+                mult = extra.mult > 0 and extra.mult or nil,
+            }
         end
     end,
-    blueprint_compat = true,
 })

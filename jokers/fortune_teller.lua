@@ -52,7 +52,7 @@ SMODS.Joker:take_ownership('fortune_teller', {
             return {}
         end
 
-        if context.using_consumeable and context.consumeable
+        if context.using_consumeable and not context.blueprint and context.consumeable
            and context.consumeable.ability and context.consumeable.ability.set == 'Tarot' then
             local gain = card.ability.extra or 0.05
             local used = (G.GAME and G.GAME.consumeable_usage_total and G.GAME.consumeable_usage_total.tarot) or 0

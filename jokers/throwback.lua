@@ -13,7 +13,8 @@ SMODS.Joker:take_ownership('throwback', {
         text = {
             '{X:mult,C:white}X#1#{} Mult for each Blind',
             'skipped this run',
-            '{X:mult,C:white}X#2#{} Mult instead if in hand',
+            '{X:mult,C:white}X#2#{} for Blinds skipped',
+            'with this Joker',
             '{C:inactive}(Currently {X:mult,C:white}X#3#{C:inactive} Mult)'
         }
     },
@@ -39,3 +40,15 @@ SMODS.Joker:take_ownership('throwback', {
     end,
     blueprint_compat = true,
 })
+
+if not rawget(_G, 'VR_THROWBACK_UPDATE_PATCHED') and rawget(_G, 'Card') and Card.update then
+    local old_update = Card.update
+    function Card:update(dt)
+        old_update(self, dt)
+        if self.ability and self.ability.name == 'Throwback' and type(self.ability.extra) == 'number'
+           and G.STAGE == G.STAGES.RUN then
+            self.ability.x_mult = current_xmult(self)
+        end
+    end
+    _G.VR_THROWBACK_UPDATE_PATCHED = true
+end

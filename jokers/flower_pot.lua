@@ -1,34 +1,38 @@
+local VANILLA_SUITS = { 'Hearts', 'Diamonds', 'Spades', 'Clubs' }
+
+local function suit_order()
+    local order, seen = {}, {}
+    for _, key in ipairs(VANILLA_SUITS) do order[#order + 1] = key; seen[key] = true end
+    for _, key in ipairs((SMODS.Suit and SMODS.Suit.obj_buffer) or {}) do
+        if not seen[key] then order[#order + 1] = key; seen[key] = true end
+    end
+    return order
+end
+
 local function count_unique_suits(scoring_hand)
     if not scoring_hand or #scoring_hand == 0 then return 0 end
-    local suits = { Hearts = 0, Diamonds = 0, Spades = 0, Clubs = 0 }
+    local order = suit_order()
+    local found, count = {}, 0
 
-    for i = 1, #scoring_hand do
-        local c = scoring_hand[i]
-        if c and c.ability and c.ability.name ~= 'Wild Card' and not c.debuff then
-            if c:is_suit('Hearts') and suits.Hearts == 0 then suits.Hearts = 1
-            elseif c:is_suit('Diamonds') and suits.Diamonds == 0 then suits.Diamonds = 1
-            elseif c:is_suit('Spades') and suits.Spades == 0 then suits.Spades = 1
-            elseif c:is_suit('Clubs') and suits.Clubs == 0 then suits.Clubs = 1
+    local function take_suit(c)
+        for _, suit in ipairs(order) do
+            if not found[suit] and c:is_suit(suit) then
+                found[suit] = true
+                count = count + 1
+                return
             end
         end
     end
 
-    for i = 1, #scoring_hand do
-        local c = scoring_hand[i]
-        if c and c.ability and c.ability.name == 'Wild Card' and not c.debuff then
-            if c:is_suit('Hearts') and suits.Hearts == 0 then
-                suits.Hearts = 1
-            elseif c:is_suit('Diamonds') and suits.Diamonds == 0 then
-                suits.Diamonds = 1
-            elseif c:is_suit('Spades') and suits.Spades == 0 then
-                suits.Spades = 1
-            elseif c:is_suit('Clubs') and suits.Clubs == 0 then
-                suits.Clubs = 1
+    for _, wild_pass in ipairs({ false, true }) do
+        for i = 1, #scoring_hand do
+            local c = scoring_hand[i]
+            if c and c.ability and not c.debuff and (c.ability.name == 'Wild Card') == wild_pass then
+                take_suit(c)
             end
         end
     end
-
-    return (suits.Hearts + suits.Diamonds + suits.Spades + suits.Clubs)
+    return count
 end
 
 SMODS.Joker:take_ownership('flower_pot', {

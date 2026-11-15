@@ -34,6 +34,120 @@ function VanillaRedux.scale_chips(amount, factor, minimum)
     return nil
 end
 
+local PLAIN_LIMIT = 1e300
+
+local function plain_value(value)
+    local kind = type(value)
+    if kind == 'number' then return value end
+    if kind ~= 'table' and kind ~= 'cdata' then return nil end
+    if rawget(_G, 'to_number') then
+        local ok, converted = pcall(to_number, value)
+        if ok and type(converted) == 'number' then return converted end
+    end
+    for _, method in ipairs({ 'to_number', 'toNumber' }) do
+        local ok, converted = pcall(function() return value[method](value) end)
+        if ok and type(converted) == 'number' then return converted end
+    end
+    return nil
+end
+
+function VanillaRedux.plain_or_big(value)
+    if type(value) == 'string' then return tonumber(value) or 0 end
+    local n = plain_value(value)
+    if n and n == n and n > -PLAIN_LIMIT and n < PLAIN_LIMIT then return n end
+    return value
+end
+
+function VanillaRedux.big(value)
+    local make_big = rawget(_G, 'to_big')
+    if make_big and type(value) == 'number' then return make_big(value) end
+    return value
+end
+
+function VanillaRedux.ge(a, b)
+    if type(a) == 'number' and type(b) == 'number' then return a >= b end
+    return VanillaRedux.big(a) >= VanillaRedux.big(b)
+end
+
+function VanillaRedux.gt(a, b)
+    if type(a) == 'number' and type(b) == 'number' then return a > b end
+    return VanillaRedux.big(a) > VanillaRedux.big(b)
+end
+
+local function rounded(value, method)
+    if type(value) == 'number' then return math[method](value) end
+    local ok, result = pcall(function() return value[method](value) end)
+    if ok and result ~= nil then return result end
+    return value
+end
+
+function VanillaRedux.floor(value) return rounded(value, 'floor') end
+function VanillaRedux.ceil(value) return rounded(value, 'ceil') end
+
+function VanillaRedux.format_number(value)
+    if type(value) ~= 'number' and rawget(_G, 'number_format') then
+        local ok, text = pcall(number_format, value)
+        if ok and type(text) == 'string' then return text end
+    end
+    return tostring(value)
+end
+
+function VanillaRedux.remove_hands_this_round(amount)
+    local cr = G.GAME and G.GAME.current_round
+    if not (cr and type(cr.hands_left) == 'number') then return end
+    if cr.hands_left > 1 then
+        cr.hands_left = math.max(1, cr.hands_left - amount)
+    end
+end
+
+local VANILLA_SUIT_ORDER = { 'Spades', 'Hearts', 'Diamonds', 'Clubs' }
+
+local function allowed_in_pool(obj, args)
+    local ok, allowed = pcall(SMODS.add_to_pool, obj, args or {})
+    return ok and allowed and true or false
+end
+
+function VanillaRedux.suit_keys()
+    local keys, seen = {}, {}
+    for _, key in ipairs(VANILLA_SUIT_ORDER) do
+        if SMODS.Suits and SMODS.Suits[key] then keys[#keys + 1] = key; seen[key] = true end
+    end
+    for _, key in ipairs((SMODS.Suit and SMODS.Suit.obj_buffer) or {}) do
+        if not seen[key] then keys[#keys + 1] = key; seen[key] = true end
+    end
+    return keys
+end
+
+function VanillaRedux.pool_suits(args)
+    local suits = {}
+    for _, key in ipairs(VanillaRedux.suit_keys()) do
+        local suit = SMODS.Suits[key]
+        if allowed_in_pool(suit, args) then suits[#suits + 1] = suit end
+    end
+    return suits
+end
+
+function VanillaRedux.pool_ranks(filter, args)
+    local ranks = {}
+    for _, key in ipairs((SMODS.Rank and SMODS.Rank.obj_buffer) or {}) do
+        local rank = SMODS.Ranks[key]
+        if rank and (not filter or filter(rank)) and allowed_in_pool(rank, args) then
+            ranks[#ranks + 1] = rank
+        end
+    end
+    return ranks
+end
+
+function VanillaRedux.is_rare_or_better(rarity)
+    if type(rarity) == 'number' then return rarity >= 3 end
+    if rarity == 'Rare' or rarity == 'Legendary' then return true end
+    local info = SMODS.Rarities and SMODS.Rarities[rarity]
+    if not info then return false end
+    local pool = info.pools and info.pools.Joker
+    local weight = (type(pool) == 'table' and pool.weight) or info.default_weight or 0
+    return weight <= 0.05
+end
+
 local MOD_FILES = {
     'jokers/8_ball.lua',
     'jokers/abstract.lua',
@@ -121,13 +235,6 @@ local MOD_FILES = {
 }
 
 print('Vanilla Redux: Loading main file...')
-
-SMODS.Atlas {
-    key = 'modicon',
-    px = 32,
-    py = 32,
-    path = 'modicon.png'
-}
 
 local failed_files = {}
 

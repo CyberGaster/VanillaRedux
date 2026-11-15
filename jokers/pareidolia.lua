@@ -1,5 +1,6 @@
 local RANKS = {'Jack', 'Queen', 'King'}
 local RANK_IDS = { Jack = 11, Queen = 12, King = 13 }
+local RANK_PLURALS = { Jack = 'Jacks', Queen = 'Queens', King = 'Kings' }
 
 local function get_random_rank(exclude)
     local pool = {}
@@ -30,8 +31,6 @@ local function active_pareidolia_rank()
     return nil
 end
 
--- Pareidolia changes which cards are face cards, so debuffs that depend on it (Faceless Joker, The
--- Plant) are recalculated as soon as it is gained or lost.
 local function refresh_playing_card_debuffs()
     G.E_MANAGER:add_event(Event({
         func = function()
@@ -88,7 +87,8 @@ SMODS.Joker:take_ownership('pareidolia', {
         refresh_playing_card_debuffs()
     end,
     loc_vars = function(self, info_queue, card)
-        return { vars = { card.ability.extra.face_rank } }
+        local rank = card.ability.extra.face_rank
+        return { vars = { RANK_PLURALS[rank] or rank } }
     end,
     set_ability = function(self, card, initial, delay_sprites)
         if initial then

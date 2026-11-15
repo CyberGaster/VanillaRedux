@@ -10,7 +10,7 @@ SMODS.Joker:take_ownership('bootstraps', {
         local current_mult = 0
         if card and card.ability then
             local m = card.ability._vp_boot_mult
-            if type(m) == 'number' then current_mult = m end
+            if m ~= nil and type(m) ~= 'string' then current_mult = m end
         end
         return { vars = { current_mult } }
     end,
@@ -34,37 +34,34 @@ SMODS.Joker:take_ownership('bootstraps', {
     end,
 })
 
-local function _boot_to_number(x)
-    if type(x) == 'number' then return x end
-    if type(x) == 'cdata' then return VanillaRedux.to_number(x, 0) end
-    if type(x) == 'string' then return tonumber(x) or 0 end
-    if type(x) == 'table' then
-        local ok, v
-        if x.toNumber then ok, v = pcall(function() return x:toNumber() end); if ok and type(v) == 'number' then return v end end
-        if x.to_number then ok, v = pcall(function() return x:to_number() end); if ok and type(v) == 'number' then return v end end
-        local s = tostring(x)
-        local n = tonumber(s)
-        if n then return n end
+-- Money past ~1.8e308 (Talisman, Amulet) stays a big number: the leftover under $2 no longer
+-- matters at that size, so only the Mult gain is added.
+local function add_bootstraps_gain(jk, amount)
+    local chunk = jk.ability._vp_boot_chunk or 2
+    if type(amount) ~= 'number' then
+        local gained = VanillaRedux.floor(VanillaRedux.big(amount) / chunk)
+        jk.ability._vp_boot_mult = VanillaRedux.plain_or_big((jk.ability._vp_boot_mult or 0) + gained)
+        return
     end
-    return 0
+    local carry = jk.ability._vp_boot_carry or 0
+    if type(carry) ~= 'number' or carry ~= carry then carry = 0 end
+    local total = carry + amount
+    local gained = math.floor(total / chunk)
+    jk.ability._vp_boot_carry = total - gained * chunk
+    if gained > 0 then
+        jk.ability._vp_boot_mult = VanillaRedux.plain_or_big((jk.ability._vp_boot_mult or 0) + gained)
+    end
 end
 
 if not rawget(_G, 'VP_BOOTSTRAPS_EASE_PATCHED') and ease_dollars then
     local original_ease_dollars = ease_dollars
     function ease_dollars(mod, instant)
-        local mod_num = _boot_to_number(mod)
-        if mod_num > 0 and G and G.jokers and G.jokers.cards then
+        local amount = VanillaRedux.plain_or_big(mod or 0)
+        if VanillaRedux.gt(amount, 0) and G and G.jokers and G.jokers.cards then
             for i = 1, #G.jokers.cards do
                 local jk = G.jokers.cards[i]
                 if jk and jk.ability and jk.ability.name == 'Bootstraps' and not jk.debuff then
-                    local chunk = (jk.ability and jk.ability._vp_boot_chunk) or 2
-                    local carry = (jk.ability and jk.ability._vp_boot_carry) or 0
-                    local total = carry + mod_num
-                    local gained = math.floor(total / chunk)
-                    jk.ability._vp_boot_carry = total - gained * chunk
-                    if gained > 0 then
-                        jk.ability._vp_boot_mult = (jk.ability._vp_boot_mult or 0) + gained
-                    end
+                    add_bootstraps_gain(jk, amount)
                 end
             end
         end
@@ -80,7 +77,7 @@ if not rawget(_G, 'VP_BOOTSTRAPS_CALC_PATCHED') and rawget(_G, 'Card') and Card.
             if context and context.cardarea == G.jokers then
                 if context.joker_main then
                     local mult = (self.ability and self.ability._vp_boot_mult) or 0
-                    if mult > 0 then
+                    if VanillaRedux.gt(mult, 0) then
                         return {
                             message = localize{type='variable', key='a_mult', vars={mult}},
                             mult_mod = mult,

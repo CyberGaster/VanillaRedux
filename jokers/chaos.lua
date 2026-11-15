@@ -27,12 +27,16 @@ local function find_chaos_jokers()
     return out
 end
 
-local function total_chaos_rerolls()
+local function chaos_rerolls(card)
+    local ex = card and card.ability and card.ability.extra
+    if type(ex) ~= 'number' or ex <= 0 then ex = 1 end
+    return ex
+end
+
+local function total_chaos_rerolls(exclude)
     local total = 0
     for _, v in ipairs(find_chaos_jokers()) do
-        local ex = v.ability and v.ability.extra
-        if type(ex) ~= 'number' or ex <= 0 then ex = 1 end
-        total = total + ex
+        if v ~= exclude then total = total + chaos_rerolls(v) end
     end
     return total
 end
@@ -65,10 +69,10 @@ end
 if not rawget(_G, 'VP_CHAOS_REMOVE_PATCHED') and rawget(_G, 'Card') and Card.remove_from_deck then
     local old_remove_from_deck = Card.remove_from_deck
     function Card:remove_from_deck(from_debuff)
-        local was_chaos = self.ability and self.ability.name == 'Chaos the Clown'
+        local was_chaos = self.ability and self.ability.name == 'Chaos the Clown' and self.added_to_deck
         local res = old_remove_from_deck(self, from_debuff)
         if was_chaos and rawget(_G, 'G') and G.GAME and G.GAME.current_round then
-            local remaining = total_chaos_rerolls()
+            local remaining = total_chaos_rerolls(self)
             local current_free = G.GAME.current_round.free_rerolls or 0
             if current_free < 0 then current_free = 0 end
             G.GAME.current_round.free_rerolls = math.min(remaining, current_free + 1)
@@ -77,6 +81,23 @@ if not rawget(_G, 'VP_CHAOS_REMOVE_PATCHED') and rawget(_G, 'Card') and Card.rem
         return res
     end
     _G.VP_CHAOS_REMOVE_PATCHED = true
+end
+
+if not rawget(_G, 'VR_CHAOS_ADD_PATCHED') and rawget(_G, 'Card') and Card.add_to_deck then
+    local old_add_to_deck = Card.add_to_deck
+    function Card:add_to_deck(from_debuff)
+        local is_chaos = self.ability and self.ability.name == 'Chaos the Clown' and not self.added_to_deck
+        local res = old_add_to_deck(self, from_debuff)
+        if is_chaos and rawget(_G, 'G') and G.GAME and G.GAME.current_round then
+            local own = chaos_rerolls(self)
+            local current_free = math.max(0, G.GAME.current_round.free_rerolls or 0)
+            local total = total_chaos_rerolls(self) + own
+            G.GAME.current_round.free_rerolls = math.min(total, current_free + own - 1)
+            if rawget(_G, 'calculate_reroll_cost') then calculate_reroll_cost(true) end
+        end
+        return res
+    end
+    _G.VR_CHAOS_ADD_PATCHED = true
 end
 
 if not rawget(_G, 'VP_CHAOS_CALC_PATCHED') and rawget(_G, 'Card') and Card.calculate_joker then

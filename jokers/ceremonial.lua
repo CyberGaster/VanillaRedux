@@ -19,23 +19,28 @@ SMODS.Joker:take_ownership('ceremonial', {
                 if G.jokers.cards[i] == card then my_pos = i; break end
             end
             local target = my_pos and G.jokers.cards[my_pos + 1] or nil
-            if target and not target.ability.eternal and not target.getting_sliced then
-                local sell_cost = target.sell_cost or 0
-                local gain = sell_cost * 3
+            if target and not SMODS.is_eternal(target, card) and not target.getting_sliced then
                 target.getting_sliced = true
+                G.GAME.joker_buffer = G.GAME.joker_buffer - 1
                 G.E_MANAGER:add_event(Event({
                     func = function()
+                        G.GAME.joker_buffer = 0
                         card:juice_up(0.8, 0.8)
                         target:start_dissolve({HEX('57ecab')}, nil, 1.6)
                         play_sound('slice1', 0.96 + math.random() * 0.08)
                         return true
                     end
                 }))
-                card.ability.mult = (card.ability.mult or 0) + gain
-                return {
-                    message = localize{type='variable', key='a_mult', vars={gain}},
-                    colour = G.C.MULT
-                }
+                SMODS.scale_card(card, {
+                    ref_table = card.ability,
+                    ref_value = 'mult',
+                    scalar_table = target,
+                    scalar_value = 'sell_cost',
+                    scalar_factor = 3,
+                    message_key = 'a_mult',
+                    message_colour = G.C.MULT,
+                })
+                return nil, true
             end
         end
         if context.joker_main then

@@ -13,7 +13,7 @@ SMODS.Joker:take_ownership('8_ball', {
         text = {
             'For every {C:attention}8{} scored,',
             'a total of {C:green}8{} times,',
-            'creates {C:green}2{} {C:tarot}tarot{} cards',
+            'creates {C:green}2{} {C:tarot}Tarot{} cards',
             '{C:inactive}(Must have room){}'
         }
     },

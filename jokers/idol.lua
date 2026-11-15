@@ -11,7 +11,7 @@ SMODS.Joker:take_ownership('idol', {
     rarity = 3,
     config = { extra = 1.5 },
     loc_vars = function(self, info_queue, card)
-        local idol = G.GAME and G.GAME.current_round and G.GAME.current_round.idol_card or {rank = 'A', suit = 'Hearts'}
+        local idol = G.GAME and G.GAME.current_round and G.GAME.current_round.idol_card or {rank = 'Ace', suit = 'Hearts'}
         return {
             vars = { card.ability.extra, localize(idol.rank, 'ranks'), localize(idol.suit, 'suits_plural'),
                 colours = { G.C.SUITS[idol.suit] }

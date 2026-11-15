@@ -8,6 +8,8 @@ SMODS.Joker:take_ownership('shoot_the_moon', {
         }
     },
     config = { extra = 13 },
+    rarity = 2,
+    cost = 7,
     loc_vars = function(self, info_queue, card)
         return { vars = { card.ability.extra } }
     end,
@@ -17,18 +19,14 @@ SMODS.Joker:take_ownership('shoot_the_moon', {
             local has_qs = false
             for i = 1, #sh do
                 local sc = sh[i]
-                if sc and not sc.debuff and sc:get_id() == 12 then
-                    if (sc.ability and sc.ability.name == 'Wild Card') or (sc.base and sc.base.suit == 'Spades') then
-                        has_qs = true
-                        break
-                    end
+                if sc and not sc.debuff and sc:get_id() == 12 and sc:is_suit('Spades') then
+                    has_qs = true
+                    break
                 end
             end
-            if has_qs then
-                local c = context.other_card
-                if (c.ability and c.ability.name == 'Wild Card') or (c.base and c.base.suit == 'Hearts') then
-                    return { h_mult = card.ability.extra, card = card }
-                end
+            -- is_suit handles Wild Cards and Smeared Joker, and Stone Cards have no suit.
+            if has_qs and context.other_card:is_suit('Hearts') then
+                return { h_mult = card.ability.extra, card = card }
             end
             return {}
         end

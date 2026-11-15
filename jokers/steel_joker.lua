@@ -5,7 +5,7 @@ local function count_steel_in_hand()
     if rawget(_G, 'G') and G.hand and G.hand.cards then
         for i = 1, #G.hand.cards do
             local card = G.hand.cards[i]
-            if card and not card.highlighted and card.config and card.config.center == G.P_CENTERS.m_steel then
+            if card and not card.highlighted and SMODS.has_enhancement(card, 'm_steel') then
                 count = count + 1
             end
         end
@@ -38,5 +38,4 @@ SMODS.Joker:take_ownership('steel_joker', {
             return {}
         end
     end,
-    blueprint_compat = true,
 })

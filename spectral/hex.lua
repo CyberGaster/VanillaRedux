@@ -13,6 +13,9 @@ SMODS.Consumable:take_ownership('c_hex', {
             if not v.edition then pool[#pool + 1] = v end
         end
         local target = #pool > 0 and pseudorandom_element(pool, pseudoseed('hex_vr_target')) or nil
+        -- Normally can_use prevents this, but another mod can force the card: with no Joker to get
+        -- Polychrome, nothing is destroyed either.
+        if not target then return end
 
         local deletable = {}
         for _, v in ipairs(G.jokers.cards) do

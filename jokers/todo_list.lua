@@ -15,23 +15,45 @@ local function rand01(seed)
     return h / 0x100000000
 end
 
-local function wrand(lo, hi, seed)
-    if hi <= lo then return lo end
-    local range = hi - lo + 1
-    local center = (lo + hi) / 2
-    local weights, total = {}, 0
-    for i = 1, range do
-        local d = math.abs((lo + i - 1) - center) / ((hi - lo) / 2 + 0.01)
-        local w = math.exp(-2 * d * d)
-        weights[i] = w; total = total + w
-    end
-    local r = rand01(seed) * total
-    local cum = 0
-    for i = 1, range do
-        cum = cum + weights[i]
-        if r <= cum then return lo + i - 1 end
-    end
-    return hi
+-- Task difficulty. Every task has an easy end and a hard end, and its "tension" (0 = easy end,
+-- 1 = hard end) says where in between it lands.
+--   start, finish  Tension at Ante 1 and from `ramp_ante` on. It rises with the Ante and then levels
+--                  off, so late Antes stop getting harder.
+--   per_stake      Extra tension for every Stake above the first, up to `max`.
+--   stake_edge     Every Stake above the first also moves both ends of the hands, discards and card
+--                  tasks up by this share of what is available. The ranges are narrow, so tension
+--                  alone barely changes the numbers; this is what makes a higher Stake felt.
+--   spread         The five tasks share one tension budget (the average). The easiest task of a list
+--                  sits `spread` below the average and the hardest `spread` above it, so a hard task
+--                  is paid for by an easy one.
+--   jitter         Small random nudge per task, so lists with the same tasks still differ.
+--   pace_loss      Stronger runs win in fewer hands, so the hands and discards the tasks are sized
+--                  from shrink by this much each Ante, down to `pace_floor`.
+--   fixed          Tension of tasks that have no range (Skip Blind). It is taken from the budget as is.
+local TUNING = {
+    start = 0.5, finish = 0.62, ramp_ante = 8,
+    per_stake = 0.02, max = 0.85, stake_edge = 0.01,
+    spread = 0.24, jitter = 0.05,
+    pace_loss = 0.008, pace_floor = 0.9,
+    fixed = { skip_blind = 0.85 },
+}
+
+local function base_tension(ante, stake)
+    local progress = math.min(1, math.max(0, (ante - 1) / math.max(1, TUNING.ramp_ante - 1)))
+    local tension = TUNING.start + (TUNING.finish - TUNING.start) * progress + (stake - 1) * TUNING.per_stake
+    return math.min(TUNING.max, tension)
+end
+
+local function pace_factor(ante)
+    return math.max(TUNING.pace_floor, 1 - TUNING.pace_loss * (ante - 1))
+end
+
+local function stake_edge(stake)
+    return TUNING.stake_edge * (stake - 1)
+end
+
+local function with_edge(fraction, edge)
+    return math.min(1, fraction + edge)
 end
 
 local function shuffle(t, seed)
@@ -43,12 +65,7 @@ local function shuffle(t, seed)
 end
 
 local function is_enhanced(c)
-    if not c or not c.ability then return false end
-    if c.ability.effect == 'Stone Card' then return true end
-    local n = c.ability.name
-    return n == 'Bonus Card' or n == 'Mult Card'
-        or n == 'Glass Card' or n == 'Gold Card' or n == 'Steel Card'
-        or n == 'Wild Card' or n == 'Lucky Card'
+    return c and c.ability and c.ability.set == 'Enhanced' or false
 end
 
 local function get_deck_cards()
@@ -128,6 +145,14 @@ local function get_game_ctx()
     return ctx
 end
 
+-- The next Ante's blinds and its boss are only rolled when the player cashes out of the boss round.
+-- Until then the blinds still describe the Ante that just ended, so new tasks have to wait for them.
+local function blinds_follow_ante(ante)
+    local rr = G and G.GAME and G.GAME.round_resets
+    if not rr then return true end
+    return VanillaRedux.to_number(rr.blind_ante, ante) >= ante
+end
+
 local HAND_DIFFICULTY = {
     ['High Card'] = 1, ['Pair'] = 1,
     ['Two Pair'] = 2, ['Three of a Kind'] = 2,
@@ -163,7 +188,7 @@ local function pick_poker_hand(seed)
     return pool[#pool].name
 end
 
-local function poker_hand_count(hand_name, total_hands, seed)
+local function poker_hand_range(hand_name, total_hands)
     local tier = HAND_DIFFICULTY[hand_name] or 3
     local played = 0
     if G and G.GAME and G.GAME.hands and G.GAME.hands[hand_name] then
@@ -186,7 +211,7 @@ local function poker_hand_count(hand_name, total_hands, seed)
     end
     hi = math.min(hi, total_hands)
     lo = math.min(lo, hi)
-    return wrand(lo, hi, seed)
+    return lo, hi
 end
 
 local function clamp_range(lo, hi, cap)
@@ -194,6 +219,40 @@ local function clamp_range(lo, hi, cap)
     hi = math.min(hi, cap)
     lo = math.min(lo, hi)
     return lo, hi
+end
+
+-- Turns the easy..hard range of every task into a number. The tasks share one tension budget
+-- (tension x number of tasks): tasks without a range spend their share first and the rest is spread
+-- around the average, so a list never ends up with only hard or only easy tasks.
+local function assign_needed(tasks, tension, seed)
+    local budget, flexible = tension * #tasks, {}
+    for _, t in ipairs(tasks) do
+        if t.lo and t.hi and t.hi > t.lo then
+            flexible[#flexible + 1] = t
+        else
+            if t.lo then t.needed = t.lo end
+            budget = budget - (TUNING.fixed[t.type] or tension)
+        end
+    end
+
+    local count = #flexible
+    if count > 0 then
+        local spread = TUNING.spread
+        local half = spread / 2
+        local average = math.max(half, math.min(1 - half, budget / count))
+        local offsets = {}
+        for i = 1, count do
+            offsets[i] = count == 1 and 0 or (-spread + 2 * spread * (i - 1) / (count - 1))
+        end
+        shuffle(offsets, seed .. '_tension')
+        for i, t in ipairs(flexible) do
+            local jitter = (rand01(seed .. '_jitter_' .. i) - 0.5) * 2 * TUNING.jitter
+            local position = math.max(0, math.min(1, average + offsets[i] + jitter))
+            t.needed = t.lo + math.floor((t.hi - t.lo) * position + 0.5)
+        end
+    end
+
+    for _, t in ipairs(tasks) do t.lo, t.hi = nil, nil end
 end
 
 local function cards_per_discard()
@@ -218,10 +277,9 @@ local function generate_tasks(card)
     local stats = get_deck_stats()
     local seed = 'todo_' .. ctx.ante .. '_' .. ctx.stake
 
-    local diff = 1.0 + (ctx.stake - 1) * 0.07
-    local ante_scale = math.max(1, 0.8 + ctx.ante * 0.1)
+    local tension = base_tension(ctx.ante, ctx.stake)
+    local pace = pace_factor(ctx.ante)
 
-    -- What can really still be done: the rest of the round in progress, if any, plus every full round after it.
     local upcoming_rounds = ctx.rounds_left - (ctx.in_round and 1 or 0)
     local total_hands = upcoming_rounds * ctx.hands + (ctx.in_round and ctx.hands_left or 0)
     local total_discards = upcoming_rounds * ctx.discards + (ctx.in_round and ctx.discards_left or 0)
@@ -246,47 +304,53 @@ local function generate_tasks(card)
     total_hands = math.max(1, total_hands)
     total_discards = math.max(0, total_discards)
     hands_before_boss = math.max(0, hands_before_boss)
-    local discard_cap = total_discards * cards_per_discard()
+    local sized_hands = math.max(1, math.floor(total_hands * pace + 0.5))
+    local sized_discards = math.floor(total_discards * pace + 0.5)
+    local discard_cap = sized_discards * cards_per_discard()
 
     local candidates = {}
     local function push(t) candidates[#candidates + 1] = t end
 
-    local h_lo = math.max(3, math.floor(total_hands * 0.5 * diff * ante_scale))
-    local h_hi = math.max(h_lo + 1, math.floor(total_hands * 0.85 * diff))
-    h_lo, h_hi = clamp_range(h_lo, h_hi, total_hands)
-    push({ type = 'hands', needed = wrand(h_lo, h_hi, seed .. '_h') })
+    local edge = stake_edge(ctx.stake)
+
+    local h_lo = math.max(3, math.floor(sized_hands * with_edge(0.4, edge)))
+    local h_hi = math.max(h_lo + 1, math.floor(sized_hands * with_edge(0.75, edge)))
+    h_lo, h_hi = clamp_range(h_lo, h_hi, sized_hands)
+    push({ type = 'hands', lo = h_lo, hi = h_hi })
 
     if total_discards > 0 then
-        local d_lo = math.max(2, math.floor(total_discards * 0.4 * diff * ante_scale))
-        local d_hi = math.max(d_lo + 1, math.floor(total_discards * 0.75 * diff))
-        d_lo, d_hi = clamp_range(d_lo, d_hi, total_discards)
-        push({ type = 'discards', needed = wrand(d_lo, d_hi, seed .. '_d') })
+        local d_lo = math.max(2, math.floor(sized_discards * with_edge(0.25, edge)))
+        local d_hi = math.max(d_lo + 1, math.floor(sized_discards * with_edge(0.55, edge)))
+        d_lo, d_hi = clamp_range(d_lo, d_hi, sized_discards)
+        push({ type = 'discards', lo = d_lo, hi = d_hi })
     end
 
     local target_hand = pick_poker_hand(seed .. '_ph')
-    local ph_needed = poker_hand_count(target_hand, total_hands, seed .. '_pn')
+    local ph_lo, ph_hi = poker_hand_range(target_hand, sized_hands)
+    local ph_cap = sized_hands
     if ctx.boss_upcoming and ctx.boss_key == 'bl_eye' then
-        ph_needed = math.min(ph_needed, hands_before_boss + 1)
+        ph_cap = math.min(ph_cap, hands_before_boss + 1)
     end
     if skip_blind then
-        ph_needed = math.min(ph_needed, math.max(1, math.floor(total_hands * 0.35)))
+        ph_cap = math.min(ph_cap, math.max(1, math.floor(total_hands * 0.35)))
     end
-    push({ type = 'poker_hand', needed = ph_needed, target_hand = target_hand })
+    ph_lo, ph_hi = clamp_range(ph_lo, ph_hi, ph_cap)
+    push({ type = 'poker_hand', lo = ph_lo, hi = ph_hi, target_hand = target_hand })
 
     if ctx.has_faces and stats.face > 0 and total_discards > 0 then
         local cap = math.min(stats.face, discard_cap)
-        local f_lo = math.max(2, math.floor(cap * 0.3 * ante_scale))
-        local f_hi = math.max(f_lo, math.floor(cap * 0.6 * diff))
+        local f_lo = math.max(2, math.floor(cap * with_edge(0.3, edge)))
+        local f_hi = math.max(f_lo, math.floor(cap * with_edge(0.6, edge)))
         f_lo, f_hi = clamp_range(f_lo, f_hi, cap)
-        push({ type = 'discard_face', needed = wrand(f_lo, f_hi, seed .. '_df') })
+        push({ type = 'discard_face', lo = f_lo, hi = f_hi })
     end
 
     if stats.number > 0 and total_discards > 0 then
         local cap = math.min(stats.number, discard_cap)
-        local n_lo = math.max(2, math.floor(cap * 0.3 * ante_scale))
-        local n_hi = math.max(n_lo, math.floor(cap * 0.6 * diff))
+        local n_lo = math.max(2, math.floor(cap * with_edge(0.25, edge)))
+        local n_hi = math.max(n_lo, math.floor(cap * with_edge(0.5, edge)))
         n_lo, n_hi = clamp_range(n_lo, n_hi, cap)
-        push({ type = 'discard_number', needed = wrand(n_lo, n_hi, seed .. '_dn') })
+        push({ type = 'discard_number', lo = n_lo, hi = n_hi })
     end
 
     local best_suit, best_cnt = nil, 0
@@ -296,16 +360,16 @@ local function generate_tasks(card)
     end
     if best_suit and best_cnt > 0 and total_discards > 0 then
         local cap = math.min(best_cnt, discard_cap)
-        local s_lo = math.max(2, math.floor(cap * 0.25 * ante_scale))
-        local s_hi = math.max(s_lo, math.floor(cap * 0.5 * diff))
+        local s_lo = math.max(2, math.floor(cap * with_edge(0.25, edge)))
+        local s_hi = math.max(s_lo, math.floor(cap * with_edge(0.5, edge)))
         s_lo, s_hi = clamp_range(s_lo, s_hi, cap)
-        push({ type = 'discard_suit', suit = best_suit, needed = wrand(s_lo, s_hi, seed .. '_ds') })
+        push({ type = 'discard_suit', suit = best_suit, lo = s_lo, hi = s_hi })
     end
 
     if stats.enhanced > 0 then
         local e_lo = 1
-        local e_hi = math.max(1, math.min(stats.enhanced, math.floor(total_hands * 0.4)))
-        push({ type = 'play_enhanced', needed = wrand(e_lo, e_hi, seed .. '_en') })
+        local e_hi = math.max(1, math.min(stats.enhanced, math.floor(sized_hands * 0.4)))
+        push({ type = 'play_enhanced', lo = e_lo, hi = e_hi })
     end
 
     local other_jokers = 0
@@ -315,17 +379,17 @@ local function generate_tasks(card)
         end
     end
     if other_jokers > 0 then
-        local j_lo = math.max(2, math.floor(other_jokers * total_hands * 0.3))
-        local j_hi = math.max(j_lo, math.floor(other_jokers * total_hands * 0.7))
-        j_lo, j_hi = clamp_range(j_lo, j_hi, other_jokers * total_hands)
-        push({ type = 'jokers', needed = wrand(j_lo, j_hi, seed .. '_jk') })
+        local j_lo = math.max(2, math.floor(other_jokers * sized_hands * with_edge(0.25, edge)))
+        local j_hi = math.max(j_lo, math.floor(other_jokers * sized_hands * with_edge(0.6, edge)))
+        j_lo, j_hi = clamp_range(j_lo, j_hi, other_jokers * sized_hands)
+        push({ type = 'jokers', lo = j_lo, hi = j_hi })
     end
 
     local slots = (G.consumeables and G.consumeables.config and tonumber(G.consumeables.config.card_limit)) or 0
     if slots > 0 then
         local c_lo = math.max(2, math.floor(slots * 0.5))
         local c_hi = math.max(c_lo, math.floor(slots * ctx.rounds_left * 0.7))
-        push({ type = 'consumables', needed = wrand(c_lo, c_hi, seed .. '_cs') })
+        push({ type = 'consumables', lo = c_lo, hi = c_hi })
     end
 
     if skip_blind then
@@ -356,8 +420,9 @@ local function generate_tasks(card)
     end
     while #tasks > 5 do table.remove(tasks) end
     while #tasks < 5 do
-        tasks[#tasks + 1] = { type = 'hands', needed = math.min(total_hands, math.max(2, math.floor(total_hands * 0.5))) }
+        tasks[#tasks + 1] = { type = 'hands', needed = math.min(sized_hands, math.max(2, math.floor(sized_hands * 0.5))) }
     end
+    assign_needed(tasks, tension, seed)
 
     for _, t in ipairs(tasks) do
         t.current = 0; t.completed = false
@@ -451,6 +516,37 @@ local function example_tasks()
     return tasks
 end
 
+local function advance_task(card, task, amount)
+    task.current = (task.current or 0) + (amount or 1)
+    if task.current >= task.needed and not task.completed then
+        task.completed = true
+        if card_eval_status_text then
+            card_eval_status_text(card, 'extra', nil, nil, nil, { message = 'Completed!', colour = G.C.GREEN })
+        end
+    end
+end
+
+local TODO_REWARD = 25
+
+local function claim_reward_if_done(card)
+    if card.ability.todo_reward_claimed then return end
+    for _, t in ipairs(card.ability.todo_tasks or {}) do
+        if not t.completed then return end
+    end
+    card.ability.todo_reward_claimed = true
+    local reward = TODO_REWARD
+    G.E_MANAGER:add_event(Event({ func = function()
+        if not card.debuff then
+            ease_dollars(reward)
+            card_eval_status_text(card, 'extra', nil, nil, nil, {
+                message = localize('$') .. reward,
+                colour = G.C.MONEY, delay = 0.45
+            })
+        end
+        return true
+    end }))
+end
+
 SMODS.Joker:take_ownership('todo_list', {
     loc_txt = {
         name = 'To Do List',
@@ -465,11 +561,11 @@ SMODS.Joker:take_ownership('todo_list', {
     loc_vars = function(self, info_queue, card)
         local tasks = (card and card.ability and card.ability.todo_tasks) or example_tasks()
         sync_loc(self, tasks)
-        return { vars = { (card and card.ability and card.ability.todo_reward) or 20 } }
+        return { vars = { TODO_REWARD } }
     end,
 
     set_ability = function(self, card, initial, delay_sprites)
-        card.ability.todo_reward = card.ability.todo_reward or 20
+        card.ability.todo_reward = TODO_REWARD
         if initial and run_is_live() then
             card.ability.todo_tasks = generate_tasks(card)
             card.ability.todo_ante = (G and G.GAME and G.GAME.round_resets and VanillaRedux.to_number(G.GAME.round_resets.ante, 1)) or 1
@@ -491,7 +587,7 @@ SMODS.Joker:take_ownership('todo_list', {
         local tasks = card.ability.todo_tasks
 
         local cur_ante = (G and G.GAME and G.GAME.round_resets and VanillaRedux.to_number(G.GAME.round_resets.ante, 1)) or 1
-        if cur_ante > VanillaRedux.to_number(card.ability.todo_ante, 0) then
+        if cur_ante > VanillaRedux.to_number(card.ability.todo_ante, 0) and blinds_follow_ante(cur_ante) then
             card.ability.todo_tasks = generate_tasks(card)
             card.ability.todo_ante = cur_ante
             card.ability.todo_reward_claimed = false
@@ -502,18 +598,8 @@ SMODS.Joker:take_ownership('todo_list', {
 
         local updated = false
 
-        local function complete(task)
-            task.completed = true
-            if card_eval_status_text then
-                card_eval_status_text(card, 'extra', nil, nil, nil, { message = 'Completed!', colour = G.C.GREEN })
-            end
-        end
-
         local function advance(task, amount)
-            task.current = (task.current or 0) + (amount or 1)
-            if task.current >= task.needed and not task.completed then
-                complete(task)
-            end
+            advance_task(card, task, amount)
             updated = true
         end
 
@@ -568,12 +654,6 @@ SMODS.Joker:take_ownership('todo_list', {
             end
         end
 
-        if context.other_joker and context.other_joker ~= card then
-            for _, t in ipairs(tasks) do
-                if t.type == 'jokers' and not t.completed then advance(t) end
-            end
-        end
-
         if context.using_consumeable then
             for _, t in ipairs(tasks) do
                 if t.type == 'consumables' and not t.completed then advance(t) end
@@ -588,26 +668,7 @@ SMODS.Joker:take_ownership('todo_list', {
 
         if updated then sync_loc(self, tasks) end
 
-        if not card.ability.todo_reward_claimed then
-            local all_done = true
-            for _, t in ipairs(tasks) do
-                if not t.completed then all_done = false; break end
-            end
-            if all_done then
-                card.ability.todo_reward_claimed = true
-                local reward = card.ability.todo_reward or 20
-                G.E_MANAGER:add_event(Event({ func = function()
-                    if not card.debuff then
-                        ease_dollars(reward)
-                        card_eval_status_text(card, 'extra', nil, nil, nil, {
-                            message = localize('$') .. reward,
-                            colour = G.C.MONEY, delay = 0.45
-                        })
-                    end
-                    return true
-                end }))
-            end
-        end
+        claim_reward_if_done(card)
 
         if context.repetition then return nil end
         return {}
@@ -615,3 +676,68 @@ SMODS.Joker:take_ownership('todo_list', {
 
     blueprint_compat = false,
 })
+
+local ADDITIVE_KEYS = { 'chips', 'h_chips', 'chip_mod', 'mult', 'h_mult', 'mult_mod', 'dollars', 'h_dollars', 'p_dollars' }
+local MULTIPLIER_KEYS = { 'x_mult', 'Xmult', 'xmult', 'Xmult_mod', 'x_chips', 'xchips', 'Xchip_mod' }
+local NOT_SCORING_CONTEXTS = { 'discard', 'pre_discard', 'retrigger_joker_check', 'post_trigger', 'mod_probability',
+    'fix_probability', 'check_enhancement', 'modify_scoring_hand', 'evaluate_poker_hand', 'debuff_hand' }
+
+local function is_hand_scoring(context)
+    if not (context and context.full_hand) then return false end
+    for _, key in ipairs(NOT_SCORING_CONTEXTS) do
+        if context[key] then return false end
+    end
+    return (context.joker_main or context.individual or context.repetition or context.before
+        or context.after or context.other_joker) and true or false
+end
+
+local function has_effect(res, depth)
+    if type(res) ~= 'table' or (depth or 0) > 4 then return false end
+    for _, key in ipairs(ADDITIVE_KEYS) do
+        if res[key] ~= nil and res[key] ~= 0 then return true end
+    end
+    for _, key in ipairs(MULTIPLIER_KEYS) do
+        if res[key] ~= nil and res[key] ~= 1 then return true end
+    end
+    if type(res.repetitions) == 'number' and res.repetitions > 0 then return true end
+    if res.message or res.level_up then return true end
+    return has_effect(res.extra, (depth or 0) + 1)
+end
+
+local function count_joker_trigger(joker)
+    if joker.debuff or not (joker.ability and joker.ability.set == 'Joker') then return end
+    if not (G.jokers and G.jokers.cards and joker.area == G.jokers) then return end
+    if joker.config and joker.config.center and joker.config.center.key == 'j_todo_list' then return end
+
+    local cur_ante = VanillaRedux.to_number(G.GAME.round_resets.ante, 1)
+    for _, todo in ipairs(G.jokers.cards) do
+        local tasks = todo.ability and todo.ability.todo_tasks
+        if todo ~= joker and not todo.debuff and tasks and todo.config.center.key == 'j_todo_list'
+           and VanillaRedux.to_number(todo.ability.todo_ante, 0) >= cur_ante then
+            local updated = false
+            for _, t in ipairs(tasks) do
+                if t.type == 'jokers' and not t.completed then
+                    advance_task(todo, t, 1)
+                    updated = true
+                end
+            end
+            if updated then
+                sync_loc(todo.config.center, tasks)
+                claim_reward_if_done(todo)
+            end
+        end
+    end
+end
+
+if not rawget(_G, 'VR_TODO_TRIGGER_PATCHED') and rawget(_G, 'Card') and Card.calculate_joker then
+    local old_calculate_joker = Card.calculate_joker
+    function Card:calculate_joker(context)
+        local outermost = context and not context.blueprint
+        local res, triggered = old_calculate_joker(self, context)
+        if outermost and is_hand_scoring(context) and has_effect(res) then
+            count_joker_trigger(self)
+        end
+        return res, triggered
+    end
+    _G.VR_TODO_TRIGGER_PATCHED = true
+end

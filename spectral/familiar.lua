@@ -67,12 +67,16 @@ SMODS.Consumable:take_ownership('c_familiar', {
                 func = function()
                     local cards = {}
                     for i = 1, (card.ability.extra or 3) do
-                        local _rank = pseudorandom_element({'J', 'Q', 'K'}, pseudoseed('familiar_create'))
-                        local _suit = pseudorandom_element({'S','H','D','C'}, pseudoseed('familiar_create'))
+                        local faces = VanillaRedux.pool_ranks(function(r) return r.face end)
+                        local rank = #faces > 0 and pseudorandom_element(faces, pseudoseed('familiar_create')) or nil
+                        local _rank = rank and rank.card_key or 'K'
+                        local suits = VanillaRedux.pool_suits({ rank = rank and rank.key })
+                        local suit = #suits > 0 and pseudorandom_element(suits, pseudoseed('familiar_create')) or nil
+                        local _suit = suit and suit.card_key or 'S'
 
                         local cen_pool = {}
                         for _, v in pairs(G.P_CENTER_POOLS["Enhanced"]) do
-                            if v.name ~= 'Stone Card' then
+                            if v.name ~= 'Stone Card' and not v.overrides_base_rank then
                                 cen_pool[#cen_pool + 1] = v
                             end
                         end

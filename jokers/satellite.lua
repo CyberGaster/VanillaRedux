@@ -1,3 +1,11 @@
+local function planet_dollars(card)
+    local unique = 0
+    for _, v in pairs((G.GAME and G.GAME.consumeable_usage) or {}) do
+        if v.set == 'Planet' then unique = unique + 1 end
+    end
+    return card.ability.extra * unique
+end
+
 SMODS.Joker:take_ownership('satellite', {
     loc_txt = {
         name = 'Satellite',
@@ -10,37 +18,57 @@ SMODS.Joker:take_ownership('satellite', {
             "{C:inactive}(Currently {C:money}$#2#{C:inactive})",
         }
     },
-    blueprint_compat = false,
+    cost = 7,
+    blueprint_compat = true,
     loc_vars = function(self, info_queue, card)
-        local unique = 0
-        for _, v in pairs((G.GAME and G.GAME.consumeable_usage) or {}) do
-            if v.set == 'Planet' then unique = unique + 1 end
-        end
-        return { vars = { card.ability.extra, card.ability.extra * unique } }
+        return { vars = { card.ability.extra, planet_dollars(card) } }
+    end,
+    calc_dollar_bonus = function(self, card)
+        local dollars = planet_dollars(card)
+        if dollars > 0 then return dollars end
     end,
     calculate = function(self, card, context)
-        if context.using_consumeable and not context.blueprint and context.consumeable and card.area == G.jokers then
-            local c = context.consumeable
-            if c.ability and c.ability.set == 'Planet' then
-                local ht = c.ability.consumeable and c.ability.consumeable.hand_type
-                if ht then
-                    G.E_MANAGER:add_event(Event({
-                        trigger = 'after', delay = 0.05, func = function()
-                            play_sound('card1', 0.85, 0.6)
-                            card:juice_up(0.9, 0.6)
-                            return true
-                        end
-                    }))
-                    G.E_MANAGER:add_event(Event({
-                        trigger = 'after', delay = 0.35, func = function()
-                            update_hand_text({sound = 'button', volume = 0.7, pitch = 0.8, delay = 0.3}, {handname=localize(ht, 'poker_hands'), chips = G.GAME.hands[ht].chips, mult = G.GAME.hands[ht].mult, level = G.GAME.hands[ht].level})
-                            level_up_hand(c, ht)
-                            update_hand_text({sound = 'button', volume = 0.7, pitch = 1.1, delay = 0}, {mult = 0, chips = 0, handname = '', level = ''})
-                            return true
-                        end
-                    }))
-                end
+        if context.vr_planet_retrigger then
+            local planet, hand_type = context.vr_planet_retrigger, context.vr_hand_type
+            return {
+                message = localize('k_again_ex'),
+                func = function()
+                    level_up_hand(planet, hand_type)
+                end,
+            }
+        end
+        if context.vr_satellite_dollars then
+            local dollars = planet_dollars(card)
+            if dollars > 0 then
+                return { vr_dollars = dollars }
             end
         end
     end,
 })
+
+if not rawget(_G, 'VP_SATELLITE_HOOKS') and rawget(_G, 'Card') and Card.use_consumeable and Card.calculate_dollar_bonus then
+    local base_use_consumeable = Card.use_consumeable
+    function Card:use_consumeable(area, copier)
+        local ret = base_use_consumeable(self, area, copier)
+        local hand_type = self.ability.set == 'Planet' and not self.debuff
+            and self.ability.consumeable and self.ability.consumeable.hand_type
+        if hand_type then
+            SMODS.calculate_context({ vr_planet_retrigger = copier or self, vr_hand_type = hand_type })
+        end
+        return ret
+    end
+
+    local base_calculate_dollar_bonus = Card.calculate_dollar_bonus
+    function Card:calculate_dollar_bonus()
+        local dollars = base_calculate_dollar_bonus(self)
+        if self.ability.set == 'Joker' and (self.ability.name == 'Blueprint' or self.ability.name == 'Brainstorm')
+            and self:can_calculate() then
+            local copied = self:calculate_joker({ vr_satellite_dollars = true })
+            if copied and copied.vr_dollars then
+                dollars = (dollars or 0) + copied.vr_dollars
+            end
+        end
+        return dollars
+    end
+    _G.VP_SATELLITE_HOOKS = true
+end

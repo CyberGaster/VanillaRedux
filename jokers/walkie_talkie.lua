@@ -2,8 +2,11 @@ if not rawget(_G, 'VP_WALKIE_STATE') then
     _G.VP_WALKIE_STATE = {}
 end
 
+-- The printed rank is used on purpose, so Pareidolia does not link cards of different ranks. Cards
+-- without a rank (Stone Cards) are skipped instead of using their hidden base rank.
 local function get_card_rank(card)
     if not card or not card.base then return nil end
+    if SMODS.has_no_rank and SMODS.has_no_rank(card) then return nil end
     return card.base.id
 end
 

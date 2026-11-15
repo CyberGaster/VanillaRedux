@@ -12,7 +12,7 @@ SMODS.Joker:take_ownership('devious', {
         text = {
             '{C:chips}+100{} Chips if played',
             'hand contains a {C:attention}Straight{}',
-            '{C:chips}+10{} chips for each additional level',
+            '{C:chips}+10{} Chips for each additional level',
             'of the {C:attention}Straight{} poker hand',
             '{C:inactive}(Currently {C:chips}+#1#{} {C:inactive}Chips)'
         }

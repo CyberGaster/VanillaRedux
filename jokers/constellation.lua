@@ -44,7 +44,7 @@ SMODS.Joker:take_ownership('constellation', {
         return { vars = { get_x_mult() } }
     end,
     calculate = function(self, card, context)
-        if context.using_consumeable then
+        if context.using_consumeable and not context.blueprint then
             if context.consumeable.config.center.set == 'Planet' then
                 return {
                     message = localize{type='variable', key='a_xmult', vars={get_x_mult()}},

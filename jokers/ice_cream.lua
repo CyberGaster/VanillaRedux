@@ -1,5 +1,3 @@
--- Active time of the current round is kept in G.GAME, which is saved with the run, so restarting the
--- game does not reset the countdown. Only the last real-time reading lives outside the save.
 local ice_cream_last_real = nil
 
 local function ice_cream_timer()
@@ -8,6 +6,8 @@ local function ice_cream_timer()
 end
 
 local function destroy_ice_cream(card)
+    if card.vr_melting then return end
+    card.vr_melting = true
     G.E_MANAGER:add_event(Event({
         func = function()
             play_sound('tarot1')
@@ -53,10 +53,14 @@ local function update_ice_cream_time_penalty()
     for i = 1, #G.jokers.cards do
         local card = G.jokers.cards[i]
         if card and card.config and card.config.center and card.config.center.key == 'j_ice_cream'
-           and not card.debuff and card.ability and card.ability.extra then
+           and not card.debuff and not card.vr_melting and card.ability and card.ability.extra then
             card.ability.extra.chips = (card.ability.extra.chips or 150) - penalties_to_apply
             if card.ability.extra.chips <= 0 then
                 destroy_ice_cream(card)
+                card_eval_status_text(card, 'extra', nil, nil, nil, {
+                    message = localize('k_melted_ex'),
+                    colour = G.C.CHIPS
+                })
             else
                 card_eval_status_text(card, 'extra', nil, nil, nil, {
                     message = localize{type='variable', key='a_chips_minus', vars={penalties_to_apply}},
@@ -112,11 +116,16 @@ SMODS.Joker:take_ownership('ice_cream', {
         end
 
         if context.after and not context.blueprint then
+            if card.vr_melting then return { calculated = true } end
             card.ability.extra.chips = card.ability.extra.chips - card.ability.extra.chip_mod
             if card.ability.extra.chips <= 0 then
                 destroy_ice_cream(card)
+                return { message = localize('k_melted_ex'), colour = G.C.CHIPS }
             end
-            return { calculated = true }
+            return {
+                message = localize{type='variable', key='a_chips_minus', vars={card.ability.extra.chip_mod}},
+                colour = G.C.CHIPS
+            }
         end
 
         if context.repetition then

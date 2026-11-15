@@ -5,11 +5,12 @@ SMODS.Joker:take_ownership('credit_card', {
             'Go up to {C:red}-$#1#{} in debt',
             'Allows you to make {C:attention}1 free purchase{}',
             'to store per round {C:inactive}[except vouchers]{}',
-            'Takes {C:attention}25%{} of money received',
+            'Takes {C:attention}25%{} of money earned',
             'at end of round'
         }
     },
     config = { extra = 20 },
+    cost = 4,
     blueprint_compat = false,
     loc_vars = function(self, info_queue, card)
         return { vars = { card.ability.extra } }
@@ -212,7 +213,6 @@ SMODS.Joker:take_ownership('credit_card', {
                     local cc_ready = ready_cc and (ready_cc.ability._vp_cc_shop_state or 'ready') == 'ready'
                     if card_to_buy and card_to_buy.ability and card_to_buy.ability._vp_cc_display_free
                        and not card_to_buy.ability.couponed and not cc_ready then
-                        -- No ready Credit Card is left to pay for this item, so it costs its real price again.
                         card_to_buy.ability._vp_cc_display_free = nil
                         card_to_buy:set_cost()
                         if _cc_to_number(card_to_buy.cost) > _cc_to_number(G.GAME.dollars) - _cc_to_number(G.GAME.bankrupt_at) then
@@ -468,16 +468,14 @@ SMODS.Joker:take_ownership('credit_card', {
             end
 
             _G.VP_CASHOUT_HANDLERS['j_credit_card'] = function(cc)
-                local round_dollars = _cc_to_number(G.GAME.current_round.dollars)
-                if round_dollars <= 0 then return end
-                local raw_fee = round_dollars * 0.25
-                local decimal_part = raw_fee - math.floor(raw_fee)
-                local credit_fee = decimal_part >= 0.5 and math.ceil(raw_fee) or math.floor(raw_fee)
+                local round_dollars = VanillaRedux.plain_or_big(G.GAME.current_round.dollars or 0)
+                if not VanillaRedux.gt(round_dollars, 0) then return end
+                local credit_fee = VanillaRedux.floor(round_dollars * 0.25 + 0.5)
                 G.GAME.current_round.dollars = round_dollars - credit_fee
                 cc:juice_up(0.8, 0.8)
                 if rawget(_G,'card_eval_status_text') then
                     card_eval_status_text(cc, 'extra', nil, nil, nil, {
-                        message = 'Credit: -$'..credit_fee,
+                        message = 'Credit: -$'..VanillaRedux.format_number(credit_fee),
                         colour = G.C.RED
                     })
                 end
@@ -521,8 +519,6 @@ SMODS.Joker:take_ownership('credit_card', {
 
 apply_credit_card_patches()
 
--- G.shop is cleared when the shop closes, unlike G.STATE, which is SMODS_BOOSTER_OPENED
--- (not SHOP) while a pack bought in the shop is open.
 local function refresh_shop_prices_after_add()
     if not G.shop then return end
     G.E_MANAGER:add_event(Event({
@@ -537,9 +533,6 @@ local function refresh_shop_prices_after_add()
     }))
 end
 
--- Prices set to $0 while a Credit Card was ready must be undone however it leaves (sold, destroyed
--- by Ankh/Hex, debuffed). Reverting first and reapplying lets another ready Credit Card keep its
--- free purchase.
 local function refresh_shop_prices_after_remove()
     if not G.shop then return end
     G.E_MANAGER:add_event(Event({

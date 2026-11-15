@@ -18,14 +18,16 @@ SMODS.Joker:take_ownership('loyalty_card', {
     calculate = function(self, card, context)
         if context.joker_main then
             card.ability.loyalty_remaining = (card.ability.extra.every - 1 - (G.GAME.hands_played - card.ability.hands_played_at_create)) % (card.ability.extra.every + 1)
-            if card.ability.loyalty_remaining == 0 then
-                local eval = function(c) return (c.ability.loyalty_remaining == 0) end
-                juice_card_until(card, eval, true)
-            elseif card.ability.loyalty_remaining == card.ability.extra.every then
+            if card.ability.loyalty_remaining == card.ability.extra.every then
                 return {
                     x_mult = card.ability.extra.Xmult
                 }
             end
+            if card.ability.loyalty_remaining == 0 and not context.blueprint then
+                local eval = function(c) return (c.ability.loyalty_remaining == 0) end
+                juice_card_until(card, eval, true)
+            end
+            return {}
         end
     end,
 })
